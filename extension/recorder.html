@@ -1,0 +1,46 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Voom recorder</title>
+    <style>
+      body {
+        font-family: sans-serif;
+        max-width: 28rem;
+        margin: 4rem auto;
+        padding: 0 1.5rem;
+      }
+      button {
+        margin-top: 1rem;
+        padding: 0.75rem 1.25rem;
+        border: 0;
+        border-radius: 999px;
+        background: #111;
+        color: #fff;
+        font: inherit;
+        cursor: pointer;
+      }
+      label {
+        display: flex;
+        gap: 0.5rem;
+        align-items: center;
+      }
+      .error {
+        color: #c00;
+        margin-top: 1rem;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Voom recorder</h1>
+    <p>Sign in on the Voom website first, then record here. The file uploads directly to R2.</p>
+    <label>
+      <input id="mic" type="checkbox" checked />
+      Include microphone
+    </label>
+    <button id="toggle">Start recording</button>
+    <p id="status"></p>
+    <p id="error" class="error"></p>
+    <script src="recorder.js"></script>
+  </body>
+</html>

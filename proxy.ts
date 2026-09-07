@@ -1,15 +1,22 @@
 import { clerkMiddleware } from "@clerk/nextjs/server";
 
-function isPublicRoute(pathname: string) {
-  return (
+function isPublicRoute(request: Request, pathname: string) {
+  if (
     pathname === "/" ||
     pathname.startsWith("/sign-in") ||
-    pathname.startsWith("/sign-up")
+    pathname.startsWith("/sign-up") ||
+    pathname.startsWith("/v/")
+  ) {
+    return true;
+  }
+
+  return (
+    request.method === "GET" && /^\/api\/videos\/[^/]+$/.test(pathname)
   );
 }
 
 export default clerkMiddleware(async (auth, req) => {
-  if (!isPublicRoute(req.nextUrl.pathname)) {
+  if (!isPublicRoute(req, req.nextUrl.pathname)) {
     await auth.protect();
   }
 });

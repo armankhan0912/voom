@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "r2:setup": "node --env-file=.env --env-file=.env.local scripts/setup-r2.mjs"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1127.0",

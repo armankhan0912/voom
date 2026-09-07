@@ -1,10 +1,8 @@
-import { PutObjectCommand } from "@aws-sdk/client-s3";
-import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
+import { db } from "@/lib/db";
+import { videos } from "@/lib/db/schema";
 import { getCurrentDbUser } from "@/lib/current-user";
-import { getS3Client } from "@/lib/s3/client";
-import { getS3Config } from "@/lib/s3/config";
-
-const UPLOAD_URL_EXPIRES_IN = 15 * 60;
+import { createUploadUrl } from "@/lib/r2/presign";
+import { serializeVideo } from "@/lib/videos";
 
 const CONTENT_TYPE_EXTENSIONS = {
   "video/webm": "webm",
@@ -25,38 +23,49 @@ export async function POST(request: Request) {
   }
 
   let contentType: string = "video/webm";
+  let title = "Untitled recording";
 
   try {
-    const body = (await request.json()) as { contentType?: unknown };
+    const body = (await request.json()) as {
+      contentType?: unknown;
+      title?: unknown;
+    };
 
     if (typeof body.contentType === "string") {
       contentType = body.contentType;
     }
+
+    if (typeof body.title === "string" && body.title.trim()) {
+      title = body.title.trim().slice(0, 120);
+    }
   } catch {
-    // Empty or invalid JSON is treated as the default video/webm upload.
+    // Empty or invalid JSON uses defaults.
   }
 
   if (!isAllowedContentType(contentType)) {
     return Response.json({ error: "Unsupported content type" }, { status: 400 });
   }
 
-  const { bucket } = getS3Config();
   const key = `videos/${user.id}/${crypto.randomUUID()}.${CONTENT_TYPE_EXTENSIONS[contentType]}`;
+  const { uploadUrl, expiresIn } = await createUploadUrl(key, contentType);
 
-  const uploadUrl = await getSignedUrl(
-    getS3Client(),
-    new PutObjectCommand({
-      Bucket: bucket,
-      Key: key,
-      ContentType: contentType,
-    }),
-    { expiresIn: UPLOAD_URL_EXPIRES_IN },
-  );
+  const created = await db
+    .insert(videos)
+    .values({
+      userId: user.id,
+      title,
+      s3Key: key,
+      status: "uploading",
+    })
+    .returning();
+
+  const video = created[0];
 
   return Response.json({
     uploadUrl,
     key,
     contentType,
-    expiresIn: UPLOAD_URL_EXPIRES_IN,
+    expiresIn,
+    video: serializeVideo(video),
   });
 }

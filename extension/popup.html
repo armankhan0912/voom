@@ -1,0 +1,44 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Voom</title>
+    <style>
+      body {
+        font-family: sans-serif;
+        width: 220px;
+        margin: 0;
+        padding: 16px;
+      }
+      button,
+      a {
+        display: block;
+        width: 100%;
+        margin: 0 0 8px;
+        padding: 10px;
+        border: 0;
+        border-radius: 999px;
+        text-align: center;
+        text-decoration: none;
+        font: inherit;
+        cursor: pointer;
+      }
+      button {
+        background: #111;
+        color: #fff;
+      }
+      a {
+        background: #f2f2f2;
+        color: #111;
+        box-sizing: border-box;
+      }
+    </style>
+  </head>
+  <body>
+    <button id="record">Record screen</button>
+    <a id="dashboard" href="http://localhost:3000/dashboard" target="_blank">
+      Dashboard
+    </a>
+    <script src="popup.js"></script>
+  </body>
+</html>
