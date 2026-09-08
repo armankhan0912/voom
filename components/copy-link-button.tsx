@@ -12,11 +12,7 @@ export function CopyLinkButton({ url }: { url: string }) {
   }
 
   return (
-    <button
-      type="button"
-      onClick={() => void copy()}
-      className="rounded-full border border-black/[.08] px-3 py-1.5 text-sm hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a]"
-    >
+    <button type="button" onClick={() => void copy()}>
       {copied ? "Copied" : "Copy link"}
     </button>
   );

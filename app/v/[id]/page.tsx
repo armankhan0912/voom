@@ -1,10 +1,11 @@
 import { eq } from "drizzle-orm";
 import { notFound } from "next/navigation";
+import { CopyLinkButton } from "@/components/copy-link-button";
 import { SiteHeader } from "@/components/site-header";
 import { db } from "@/lib/db";
 import { videos } from "@/lib/db/schema";
 import { createPlaybackUrl } from "@/lib/r2/presign";
-import { VIDEO_ID_PATTERN } from "@/lib/videos";
+import { shareUrl, VIDEO_ID_PATTERN } from "@/lib/videos";
 
 export default async function WatchPage({
   params,
@@ -28,30 +29,21 @@ export default async function WatchPage({
     video.status === "ready" ? await createPlaybackUrl(video.s3Key) : null;
 
   return (
-    <div className="flex min-h-full flex-col">
+    <div>
       <SiteHeader />
-      <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-6 px-6 py-10">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">{video.title}</h1>
-          <p className="text-sm text-zinc-500">{video.status}</p>
-        </div>
-
+      <main>
+        <h1>{video.title}</h1>
+        <p>{video.status}</p>
         {video.status === "ready" && playbackUrl ? (
-          <video
-            className="w-full rounded-xl bg-black"
-            src={playbackUrl}
-            controls
-            playsInline
-          />
-        ) : video.status === "uploading" ? (
-          <p className="text-zinc-600 dark:text-zinc-400">
-            This recording is still uploading.
-          </p>
+          <video src={playbackUrl} controls playsInline />
         ) : (
-          <p className="text-zinc-600 dark:text-zinc-400">
-            This recording failed to process.
-          </p>
+          <p>This recording is not ready.</p>
         )}
+        {video.status === "ready" ? (
+          <p>
+            <CopyLinkButton url={shareUrl(video.id)} />
+          </p>
+        ) : null}
       </main>
     </div>
   );

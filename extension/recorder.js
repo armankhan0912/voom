@@ -1,5 +1,4 @@
 const toggle = document.getElementById("toggle");
-const mic = document.getElementById("mic");
 const status = document.getElementById("status");
 const error = document.getElementById("error");
 
@@ -8,46 +7,15 @@ let stream = null;
 const chunks = [];
 let startedAt = 0;
 
-async function captureStream(includeMicrophone) {
-  const display = await navigator.mediaDevices.getDisplayMedia({
+async function start() {
+  if (error) error.textContent = "";
+  stream = await navigator.mediaDevices.getDisplayMedia({
     video: true,
     audio: true,
   });
-
-  if (!includeMicrophone) {
-    return display;
-  }
-
-  const microphone = await navigator.mediaDevices.getUserMedia({ audio: true });
-  const context = new AudioContext();
-  const destination = context.createMediaStreamDestination();
-  const displayAudio = display.getAudioTracks()[0];
-
-  if (displayAudio) {
-    context
-      .createMediaStreamSource(new MediaStream([displayAudio]))
-      .connect(destination);
-  }
-
-  context.createMediaStreamSource(microphone).connect(destination);
-
-  return new MediaStream([
-    ...display.getVideoTracks(),
-    ...destination.stream.getAudioTracks(),
-  ]);
-}
-
-async function start() {
-  error.textContent = "";
-  stream = await captureStream(Boolean(mic?.checked));
   chunks.length = 0;
   startedAt = Date.now();
-  recorder = new MediaRecorder(stream, {
-    mimeType: MediaRecorder.isTypeSupported("video/webm;codecs=vp9,opus")
-      ? "video/webm;codecs=vp9,opus"
-      : "video/webm",
-  });
-
+  recorder = new MediaRecorder(stream);
   recorder.ondataavailable = (event) => {
     if (event.data.size > 0) {
       chunks.push(event.data);
@@ -61,9 +29,8 @@ async function start() {
       recorder.stop();
     }
   });
-
-  recorder.start(1000);
-  if (toggle) toggle.textContent = "Stop recording";
+  recorder.start();
+  if (toggle) toggle.textContent = "Stop";
   if (status) status.textContent = "Recording…";
 }
 
@@ -85,7 +52,6 @@ async function finish() {
 
   const buffer = await blob.arrayBuffer();
   const duration = Math.round((Date.now() - startedAt) / 1000);
-
   const result = await chrome.runtime.sendMessage({
     type: "voom-upload",
     buffer,
@@ -99,7 +65,7 @@ async function finish() {
     return;
   }
 
-  if (status) status.textContent = "Uploaded. Opening video…";
+  if (status) status.textContent = "Uploaded.";
 }
 
 toggle?.addEventListener("click", () => {
@@ -109,6 +75,9 @@ toggle?.addEventListener("click", () => {
   }
 
   void start().catch((caught) => {
-    if (error) error.textContent = caught instanceof Error ? caught.message : "Could not record.";
+    if (error) {
+      error.textContent =
+        caught instanceof Error ? caught.message : "Could not record.";
+    }
   });
 });
