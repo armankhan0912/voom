@@ -10,6 +10,33 @@
   "background": {
     "service_worker": "background.js"
   },
-  "permissions": ["tabs"],
-  "host_permissions": ["http://localhost:3000/*", "http://127.0.0.1:3000/*"]
+  "permissions": ["tabs", "scripting", "activeTab", "storage", "desktopCapture", "offscreen"],
+  "host_permissions": [
+    "http://localhost:3000/*",
+    "http://127.0.0.1:3000/*",
+    "http://*/*",
+    "https://*/*"
+  ],
+  "externally_connectable": {
+    "matches": [
+      "http://localhost:3000/*",
+      "http://127.0.0.1:3000/*"
+    ]
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "http://localhost:3000/*",
+        "http://127.0.0.1:3000/*"
+      ],
+      "js": ["bridge.js"],
+      "run_at": "document_start"
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": ["overlay.html", "overlay.js", "overlay.css", "mic-bridge.js"],
+      "matches": ["http://*/*", "https://*/*"]
+    }
+  ]
 }

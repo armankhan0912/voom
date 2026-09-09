@@ -1,3 +1,6 @@
+document.getElementById("home")?.setAttribute("href", `${VOOM_APP_URL}/`);
+
 document.getElementById("record")?.addEventListener("click", () => {
-  chrome.tabs.create({ url: chrome.runtime.getURL("recorder.html") });
+  chrome.runtime.sendMessage({ type: "voom-begin", source: "popup", autostart: true });
+  window.close();
 });

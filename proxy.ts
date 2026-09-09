@@ -3,9 +3,11 @@ import { clerkMiddleware } from "@clerk/nextjs/server";
 function isPublicRoute(request: Request, pathname: string) {
   if (
     pathname === "/" ||
+    pathname === "/dashboard" ||
     pathname.startsWith("/sign-in") ||
     pathname.startsWith("/sign-up") ||
-    pathname.startsWith("/v/")
+    pathname.startsWith("/v/") ||
+    pathname.startsWith("/voom/")
   ) {
     return true;
   }

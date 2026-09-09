@@ -1,4 +1,4 @@
-import { HeadObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import { DeleteObjectCommand, HeadObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import { getR2Config } from "./config";
 
 let client: S3Client | undefined;
@@ -36,4 +36,15 @@ export async function objectExists(key: string) {
   } catch {
     return false;
   }
+}
+
+export async function deleteObject(key: string) {
+  const { bucket } = getR2Config();
+
+  await getR2Client().send(
+    new DeleteObjectCommand({
+      Bucket: bucket,
+      Key: key,
+    }),
+  );
 }

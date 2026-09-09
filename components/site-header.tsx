@@ -7,12 +7,16 @@ export async function SiteHeader() {
   const user = await getCurrentDbUser();
 
   return (
-    <header>
-      <Link href="/">Voom</Link>
+    <header className="flex items-center justify-between border-b border-voom-line bg-voom-surface px-6 py-4">
+      <Link href="/" className="font-semibold">
+        Voom
+      </Link>
       {user ? (
-        <nav>
-          <Link href="/record">Record</Link>{" "}
-          <Link href="/dashboard">Videos</Link> <SignOutButton />
+        <nav className="flex items-center gap-4 text-sm">
+          <Link href="/">Home</Link>
+          <Link href="/vooms">My Vooms</Link>
+          <Link href="/record">Record</Link>
+          <SignOutButton />
         </nav>
       ) : (
         <SignInButton />

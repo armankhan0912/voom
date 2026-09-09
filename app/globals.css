@@ -1,6 +1,37 @@
 @import "tailwindcss";
 
-body {
-  font-family: sans-serif;
-  margin: 0;
+@theme {
+  --font-sans: ui-sans-serif, system-ui, sans-serif;
+  --color-voom-ink: #1a1a1a;
+  --color-voom-muted: #6b6b6b;
+  --color-voom-paper: #f5f5f0;
+  --color-voom-surface: #ffffff;
+  --color-voom-line: #e8e8e2;
+  --color-voom-accent: #1a1a1a;
+  --color-voom-accent-hover: #333333;
+  --color-voom-sidebar: #1a1a1a;
+}
+
+@layer base {
+  body {
+    margin: 0;
+    font-family: var(--font-sans);
+    background: var(--color-voom-paper);
+    color: var(--color-voom-ink);
+  }
+
+  a {
+    color: inherit;
+    text-decoration: none;
+  }
+
+  button,
+  select,
+  input {
+    font: inherit;
+  }
+}
+
+.cl-lastAuthenticationStrategyBadge {
+  display: none !important;
 }
