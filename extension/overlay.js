@@ -18,7 +18,6 @@ let cameraStream = null;
 let lastDeviceId = "";
 let cameraFailedFor = null;
 let cameraSyncId = 0;
-const micPublisher = part === "bubble" ? voomPublishMic() : null;
 
 function formatElapsed(ms) {
   const total = Math.max(0, Math.floor(ms / 1000));
@@ -42,6 +41,23 @@ function stopCamera() {
   if (camera) {
     camera.pause();
     camera.srcObject = null;
+  }
+}
+
+async function primeMic(needed) {
+  if (!needed || part === "toolbar") {
+    return { ok: true };
+  }
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({
+      audio: true,
+      video: false,
+    });
+    stream.getTracks().forEach((track) => track.stop());
+    return { ok: true };
+  } catch (error) {
+    const denied = error?.name === "NotAllowedError";
+    return { ok: !denied, denied };
   }
 }
 
@@ -219,20 +235,43 @@ function applyState(payload) {
       payload.state === "paused");
 
   void syncCamera(showCamera, payload.cameraDeviceId || "");
-
-  const publishMic =
-    Boolean(payload.micEnabled) &&
-    (payload.state === "screen_selection" ||
-      payload.state === "recording" ||
-      payload.state === "paused");
-  if (publishMic) {
-    void micPublisher?.start();
-  } else {
-    micPublisher?.stop();
-  }
 }
 
-chrome.runtime.onMessage.addListener((message) => {
+function chooseDesktop(recorderTabId) {
+  return new Promise((resolve) => {
+    const finish = (payload) => resolve(payload);
+
+    void (async () => {
+      try {
+        if (!chrome.desktopCapture?.chooseDesktopMedia) {
+          finish({ streamId: "", unsupported: true });
+          return;
+        }
+
+        let targetTab = null;
+        if (recorderTabId != null) {
+          try {
+            targetTab = await chrome.tabs.get(recorderTabId);
+          } catch {
+            targetTab = null;
+          }
+        }
+
+        const sources = ["screen", "window", "tab"];
+        const done = (id) => finish({ streamId: id || "", unsupported: false });
+        if (targetTab) {
+          chrome.desktopCapture.chooseDesktopMedia(sources, targetTab, done);
+        } else {
+          chrome.desktopCapture.chooseDesktopMedia(sources, done);
+        }
+      } catch {
+        finish({ streamId: "", unsupported: true });
+      }
+    })();
+  });
+}
+
+chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   if (message?.type === "voom-release-camera") {
     cameraSyncId += 1;
     stopCamera();
@@ -241,6 +280,15 @@ chrome.runtime.onMessage.addListener((message) => {
 
   if (message?.type === "voom-ui-state") {
     applyState(message);
+    return;
+  }
+
+  if (message?.type === "voom-overlay-choose-desktop") {
+    if (part === "toolbar") {
+      return;
+    }
+    void chooseDesktop(message.recorderTabId).then(sendResponse);
+    return true;
   }
 });
 
@@ -252,13 +300,27 @@ window.addEventListener("message", (event) => {
   if (event.data?.type === "voom-stop-camera") {
     cameraSyncId += 1;
     stopCamera();
+    return;
+  }
+  if (event.data?.type === "voom-prime-media") {
+    void primeMic(event.data.mic !== false).then((result) => {
+      window.parent.postMessage({ type: "voom-prime-media-result", ...result }, "*");
+    });
+    return;
+  }
+  if (event.data?.type === "voom-choose-desktop") {
+    if (part === "toolbar") {
+      return;
+    }
+    void chooseDesktop(event.data.recorderTabId).then((result) => {
+      window.parent.postMessage({ type: "voom-choose-desktop-result", ...result }, "*");
+    });
   }
 });
 
 window.addEventListener("pagehide", () => {
   cameraSyncId += 1;
   stopCamera();
-  micPublisher?.stop();
 });
 
 const DRAG_THRESHOLD = 4;

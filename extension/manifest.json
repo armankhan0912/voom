@@ -35,7 +35,7 @@
   ],
   "web_accessible_resources": [
     {
-      "resources": ["overlay.html", "overlay.js", "overlay.css", "mic-bridge.js"],
+      "resources": ["overlay.html", "overlay.js", "overlay.css"],
       "matches": ["http://*/*", "https://*/*"]
     }
   ]

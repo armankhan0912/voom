@@ -13,6 +13,7 @@ function emptySession() {
     usingOffscreen: false,
     overlayTabId: null,
     sourceTabId: null,
+    pendingStreamId: null,
     state: "idle",
     elapsedMs: 0,
   };
@@ -185,11 +186,29 @@ async function closeRecorder() {
   await closeLegacyRecorderTabs();
 }
 
-async function openRecorder(query) {
+async function keepUserOnSourceTab() {
+  const session = await getSession();
+  const stayOn = session.sourceTabId ?? session.overlayTabId;
+  if (stayOn == null || stayOn === session.recorderTabId) {
+    return;
+  }
+  await chrome.tabs.update(stayOn, { active: true }).catch(() => {});
+}
+
+async function activateRecorderTab() {
+  const session = await getSession();
+  if (session.recorderTabId == null) {
+    return;
+  }
+  await chrome.tabs.update(session.recorderTabId, { active: true }).catch(() => {});
+}
+
+async function openRecorder(query, openerTabId) {
   await closeRecorder();
   const tab = await chrome.tabs.create({
     url: chrome.runtime.getURL("recorder.html") + (query ? `?${query}` : ""),
-    active: false,
+    active: true,
+    ...(openerTabId != null ? { openerTabId } : {}),
   });
   return { usingOffscreen: false, recorderTabId: tab.id ?? null };
 }
@@ -199,6 +218,66 @@ async function recorderIsOpen(session) {
     return hasOffscreenDocument();
   }
   return tabExists(session.recorderTabId);
+}
+
+async function sendToOverlay(tabId, message, timeoutMs) {
+  if (tabId == null) {
+    return null;
+  }
+  const started = Date.now();
+  while (Date.now() - started < timeoutMs) {
+    try {
+      return await chrome.tabs.sendMessage(tabId, message);
+    } catch {
+      await delay(80);
+    }
+  }
+  return null;
+}
+
+async function primeOverlayMedia(tabId, micEnabled) {
+  if (!micEnabled || tabId == null) {
+    return { ok: true };
+  }
+  return (await sendToOverlay(tabId, { type: "voom-prime-media", mic: true }, 15000)) ?? { ok: false };
+}
+
+async function pickDesktopFromOverlay(tabId, recorderTabId) {
+  const result = await sendToOverlay(
+    tabId,
+    { type: "voom-choose-desktop", recorderTabId },
+    8000,
+  );
+  if (result == null || result.unsupported) {
+    return { streamId: "", unsupported: true };
+  }
+  return {
+    streamId: typeof result.streamId === "string" ? result.streamId : "",
+    unsupported: false,
+  };
+}
+
+async function chooseDesktopForRecorder(senderTab) {
+  let targetTab = senderTab ?? null;
+  if (!targetTab) {
+    const session = await getSession();
+    if (session.recorderTabId != null) {
+      try {
+        targetTab = await chrome.tabs.get(session.recorderTabId);
+      } catch {
+        targetTab = null;
+      }
+    }
+  }
+
+  return new Promise((resolve) => {
+    const done = (id) => resolve(id || "");
+    if (!chrome.desktopCapture?.chooseDesktopMedia || !targetTab) {
+      done("");
+      return;
+    }
+    chrome.desktopCapture.chooseDesktopMedia(["screen", "window", "tab"], targetTab, done);
+  });
 }
 
 async function beginRecording(message = {}) {
@@ -245,11 +324,12 @@ async function beginRecording(message = {}) {
     usingOffscreen: false,
     overlayTabId: null,
     sourceTabId,
+    pendingStreamId: null,
     state: "screen_selection",
     elapsedMs: 0,
   });
 
-  const host = await openRecorder(params.toString());
+  const host = await openRecorder(params.toString(), sourceTabId);
 
   await setSession({
     recorderTabId: host.recorderTabId,
@@ -263,7 +343,6 @@ async function beginRecording(message = {}) {
         files: ["bridge.js"],
       })
       .catch(() => {});
-    void chrome.tabs.update(sourceTabId, { active: true }).catch(() => {});
   }
 
   return { ok: true };
@@ -301,6 +380,25 @@ function sendToRecorder(action) {
   chrome.runtime
     .sendMessage({ type: "voom-recorder-control", action })
     .catch(() => {});
+}
+
+async function waitForTabComplete(tabId) {
+  if (tabId == null) {
+    return;
+  }
+  const started = Date.now();
+  while (Date.now() - started < 8000) {
+    try {
+      const tab = await chrome.tabs.get(tabId);
+      if (tab.status === "complete") {
+        await delay(150);
+        return;
+      }
+    } catch {
+      return;
+    }
+    await delay(50);
+  }
 }
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
@@ -388,45 +486,17 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
   if (message?.type === "voom-choose-desktop") {
     void (async () => {
-      const started = Date.now();
-      let session = await getSession();
-      while (session.recorderTabId == null && Date.now() - started < 2000) {
-        await delay(50);
-        session = await getSession();
-      }
-
-      const sources = ["screen", "window", "tab"];
-
-      if (session.sourceTabId != null) {
-        await chrome.tabs.update(session.sourceTabId, { active: true }).catch(() => {});
-      }
-
-      let targetTab = null;
-      if (session.recorderTabId != null) {
-        try {
-          targetTab = await chrome.tabs.get(session.recorderTabId);
-        } catch {
-          targetTab = null;
-        }
-      }
-
-      const streamId = await new Promise((resolve) => {
-        const done = (id) => resolve(id || "");
-        if (!chrome.desktopCapture?.chooseDesktopMedia) {
-          done("");
-          return;
-        }
-        // Bind the stream to the hidden recorder tab so getUserMedia can
-        // consume it there. Targeting the website tab makes Chrome ask again.
-        if (targetTab) {
-          chrome.desktopCapture.chooseDesktopMedia(sources, targetTab, done);
-        } else {
-          chrome.desktopCapture.chooseDesktopMedia(sources, done);
-        }
+      const streamId = await chooseDesktopForRecorder(sender.tab ?? null);
+      sendResponse({
+        streamId,
+        unsupported: !chrome.desktopCapture?.chooseDesktopMedia,
       });
-
-      sendResponse({ streamId, unsupported: !chrome.desktopCapture?.chooseDesktopMedia });
     })().catch(() => sendResponse({ streamId: "", unsupported: true }));
+    return true;
+  }
+
+  if (message?.type === "voom-activate-recorder") {
+    void activateRecorderTab().then(() => sendResponse({ ok: true }));
     return true;
   }
 
@@ -448,8 +518,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       const focusId = session.sourceTabId ?? session.overlayTabId;
       if (focusId != null) {
         await chrome.tabs.update(focusId, { active: true }).catch(() => {});
+        await moveOverlayToTab(focusId);
       }
-      await ensureOverlay();
+      sendToRecorder("sync");
     })();
     return;
   }
@@ -568,8 +639,8 @@ async function completeUpload(message) {
   if (!failed) {
     await chrome.tabs.create({ url: `${VOOM_APP_URL}/voom/${videoId}`, active: true });
     await removeAllOverlays();
-    void closeRecorder();
-    void clearSession();
+    await closeRecorder();
+    await clearSession();
   }
 
   return completeResponse.json();

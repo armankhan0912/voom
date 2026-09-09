@@ -18,7 +18,7 @@
     iframe.id = id;
     iframe.className = "voom-overlay-frame";
     iframe.src = `${overlayUrl}?part=${part}`;
-    iframe.allow = "camera; microphone; autoplay";
+    iframe.allow = "camera; microphone; autoplay; display-capture";
     iframe.setAttribute("style", style);
     document.documentElement.appendChild(iframe);
     return iframe;
@@ -44,6 +44,11 @@
       "opacity:0",
     ].join(";"),
   );
+
+  let bubbleLoaded = false;
+  bubbleFrame.addEventListener("load", () => {
+    bubbleLoaded = true;
+  });
 
   const toolbarFrame = mountFrame(
     "voom-overlay-toolbar",
@@ -237,16 +242,95 @@
   window.addEventListener("pointercancel", endDrag);
   window.addEventListener("blur", endDrag);
 
-  chrome.runtime.onMessage.addListener((message) => {
-    if (message?.type !== "voom-ui-state") {
+  chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+    if (!bubbleFrame.isConnected) {
       return;
     }
-    try {
-      bubbleFrame.contentWindow?.postMessage(message, "*");
-      toolbarFrame.contentWindow?.postMessage(message, "*");
-    } catch {
-      // Iframe not ready.
+
+    if (message?.type === "voom-ui-state") {
+      try {
+        bubbleFrame.contentWindow?.postMessage(message, "*");
+        toolbarFrame.contentWindow?.postMessage(message, "*");
+      } catch {
+        // Iframe not ready.
+      }
+      return;
     }
+
+    const request =
+      message?.type === "voom-prime-media"
+        ? {
+            payload: { type: "voom-prime-media", mic: message.mic !== false },
+            resultType: "voom-prime-media-result",
+            timeoutMs: 60000,
+            showBubble: true,
+          }
+        : message?.type === "voom-choose-desktop"
+          ? {
+              payload: {
+                type: "voom-choose-desktop",
+                recorderTabId: message.recorderTabId,
+              },
+              resultType: "voom-choose-desktop-result",
+              timeoutMs: 180000,
+              showBubble: false,
+            }
+          : null;
+
+    if (!request) {
+      return;
+    }
+
+    let settled = false;
+    const finish = (payload) => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      window.removeEventListener("message", onResult);
+      if (request.showBubble && bubbleFrame.style.opacity === "0.01") {
+        bubbleFrame.style.visibility = "hidden";
+        bubbleFrame.style.opacity = "0";
+      }
+      sendResponse(payload);
+    };
+
+    function onResult(event) {
+      if (event.source !== bubbleFrame.contentWindow) {
+        return;
+      }
+      if (event.data?.type !== request.resultType) {
+        return;
+      }
+      finish(event.data);
+    }
+
+    window.addEventListener("message", onResult);
+
+    let sent = false;
+    const sendRequest = () => {
+      if (sent || settled) {
+        return;
+      }
+      sent = true;
+      try {
+        if (request.showBubble) {
+          bubbleFrame.style.visibility = "visible";
+          bubbleFrame.style.opacity = "0.01";
+        }
+        bubbleFrame.contentWindow?.postMessage(request.payload, "*");
+      } catch {
+        finish({ ok: false, streamId: "", unsupported: true });
+      }
+    };
+
+    if (bubbleLoaded) {
+      sendRequest();
+    } else {
+      bubbleFrame.addEventListener("load", sendRequest, { once: true });
+    }
+    window.setTimeout(() => finish({ ok: false, streamId: "", unsupported: true }), request.timeoutMs);
+    return true;
   });
 
   window.addEventListener("resize", () => {

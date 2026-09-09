@@ -153,7 +153,7 @@ function RecordSetupOverlay({ onClose }: { onClose: () => void }) {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         video: deviceId ? { deviceId: { ideal: deviceId } } : true,
-        audio: false,
+        audio: micEnabled,
       });
       if (gen !== previewGenRef.current) {
         stream.getTracks().forEach((track) => track.stop());
@@ -174,6 +174,7 @@ function RecordSetupOverlay({ onClose }: { onClose: () => void }) {
         }
       }
       previous?.getTracks().forEach((track) => track.stop());
+      stream.getAudioTracks().forEach((track) => track.stop());
 
       const usedId = stream.getVideoTracks()[0]?.getSettings().deviceId || deviceId;
       if (usedId && !cameraDeviceIdRef.current) {
@@ -190,7 +191,7 @@ function RecordSetupOverlay({ onClose }: { onClose: () => void }) {
       setCameraEnabled(false);
       setError("Camera permission was denied.");
     }
-  }, [cameraEnabled, fillDevices, stopPreview]);
+  }, [cameraEnabled, fillDevices, micEnabled, stopPreview]);
 
   useEffect(() => {
     cameraDeviceIdRef.current = cameraDeviceId;

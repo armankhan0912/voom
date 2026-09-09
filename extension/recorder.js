@@ -118,23 +118,29 @@ async function openMicIfNeeded() {
     return;
   }
 
+  const selectedDeviceId = micDeviceSelect?.value || "";
+  const audio = selectedDeviceId
+    ? { deviceId: { ideal: selectedDeviceId } }
+    : true;
+
   try {
-    micStream = await Promise.race([
-      voomGetLocalMic(),
-      new Promise((_, reject) => {
-        window.setTimeout(() => reject(new Error("timeout")), 1500);
-      }),
-    ]);
+    micStream = await navigator.mediaDevices.getUserMedia({
+      audio,
+      video: false,
+    });
   } catch {
-    micStream = null;
+    try {
+      micStream = await navigator.mediaDevices.getUserMedia({
+        audio: true,
+        video: false,
+      });
+    } catch {
+      throw new Error("Microphone is on, but Chrome did not provide an audio track.");
+    }
   }
 
-  micStream?.getAudioTracks().forEach((track) => {
-    track.enabled = true;
-  });
-
-  if (!micStream?.getAudioTracks().length && micEnabledInput) {
-    micEnabledInput.checked = false;
+  if (!micStream?.getAudioTracks().length) {
+    throw new Error("Microphone is on, but Chrome did not provide an audio track.");
   }
 }
 
@@ -209,6 +215,30 @@ async function captureWithDisplayMedia() {
   );
 }
 
+function waitUntilVisible(timeoutMs = 4000) {
+  if (document.visibilityState === "visible") {
+    return Promise.resolve();
+  }
+  return new Promise((resolve) => {
+    let settled = false;
+    const done = () => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      document.removeEventListener("visibilitychange", onChange);
+      resolve();
+    };
+    function onChange() {
+      if (document.visibilityState === "visible") {
+        done();
+      }
+    }
+    document.addEventListener("visibilitychange", onChange);
+    window.setTimeout(done, timeoutMs);
+  });
+}
+
 async function captureDisplay() {
   const fromBackground = await chrome.runtime
     .sendMessage({ type: "voom-choose-desktop" })
@@ -229,6 +259,9 @@ async function captureDisplay() {
   if (!streamId) {
     throw cancelError();
   }
+
+  await chrome.runtime.sendMessage({ type: "voom-activate-recorder" }).catch(() => null);
+  await waitUntilVisible();
 
   try {
     return assertDisplayStream(await getDesktopStream(streamId));
@@ -272,10 +305,17 @@ async function startRecording() {
   setState("screen_selection");
 
   try {
-    const micPromise = openMicIfNeeded();
     displayStream = await captureDisplay();
-    await micPromise;
+    await openMicIfNeeded();
   } catch (error) {
+    const cancelled = error?.name === "CancelError" || error?.message === "cancelled";
+    if (!cancelled) {
+      console.error("[voom] recording failed", error);
+    }
+    stopTracks(displayStream);
+    stopTracks(micStream);
+    displayStream = null;
+    micStream = null;
     if (error?.name === "CancelError" || error?.message === "cancelled") {
       chrome.runtime.sendMessage({ type: "voom-capture-cancelled" }).catch(() => {});
       return;
@@ -291,6 +331,19 @@ async function startRecording() {
   }
 
   recordStream = buildRecordStream();
+
+  const audioTracks = recordStream.getAudioTracks();
+  console.log("[voom] micStream", Boolean(micStream), "micAudioTracks", micStream?.getAudioTracks().length ?? 0, "recordAudioTracks", audioTracks.length);
+
+  if (micEnabledInput?.checked && audioTracks.length === 0) {
+    console.error("[voom] microphone is on, but the combined recording stream has no audio track");
+    stopTracks(displayStream);
+    stopTracks(micStream);
+    stopTracks(recordStream);
+    chrome.runtime.sendMessage({ type: "voom-capture-cancelled" }).catch(() => {});
+    return;
+  }
+
   chunks.length = 0;
   recordedMs = 0;
   segmentStartedAt = Date.now();
@@ -523,6 +576,7 @@ async function boot() {
   }
 
   const cameraDeviceId = params.get("cameraDeviceId");
+  const micDeviceId = params.get("micDeviceId");
   if (cameraDeviceId && cameraDeviceSelect) {
     const option = document.createElement("option");
     option.value = cameraDeviceId;
@@ -530,9 +584,18 @@ async function boot() {
     cameraDeviceSelect.replaceChildren(option);
     cameraDeviceSelect.value = cameraDeviceId;
   }
+  if (micDeviceId && micDeviceSelect) {
+    const option = document.createElement("option");
+    option.value = micDeviceId;
+    option.textContent = "Microphone";
+    micDeviceSelect.replaceChildren(option);
+    micDeviceSelect.value = micDeviceId;
+  }
 
   broadcast();
-  await startRecording();
+  if (params.get("autostart") !== "0") {
+    await startRecording();
+  }
 }
 
 void boot();
