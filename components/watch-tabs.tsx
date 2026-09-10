@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { Chapters } from "@/components/chapters";
 import { Summary } from "@/components/summary";
 import { Transcript } from "@/components/transcript";
 
@@ -31,17 +32,14 @@ export function WatchTabs({ videoId }: { videoId: string }) {
           </button>
         ))}
       </div>
-      {tab === "chapters" ? (
-        <p className="mt-4 text-sm text-voom-muted">
-          Chapters are coming soon. You will be able to jump through this Voom
-          here.
-        </p>
-      ) : null}
       <div className={tab === "summary" ? undefined : "hidden"}>
         <Summary videoId={videoId} />
       </div>
       <div className={tab === "transcript" ? undefined : "hidden"}>
         <Transcript videoId={videoId} />
+      </div>
+      <div className={tab === "chapters" ? undefined : "hidden"}>
+        <Chapters videoId={videoId} />
       </div>
     </div>
   );

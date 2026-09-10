@@ -111,3 +111,105 @@ export async function generateSummaryFromTranscript(
 
   return parseGeneratedSummary(parsed);
 }
+
+const CHAPTERS_PROMPT = `You create video chapters from a timestamped transcript only.
+
+Identify meaningful topic changes. Do not make a chapter for every sentence.
+Create about 3–8 chapters, or fewer for a short recording.
+Write concise titles in the same language as the transcript (English, Hindi, Hinglish, or mixed).
+Describe only what the speaker actually said. Do not invent details.
+
+Each chapter start must be copied from a transcript timestamp in the input.
+Use the numeric start value after the pipe, not a rounded or invented time.
+
+Return JSON with:
+- chapters: array of { start, title }`;
+
+const CHAPTERS_SCHEMA = {
+  type: "OBJECT",
+  properties: {
+    chapters: {
+      type: "ARRAY",
+      items: {
+        type: "OBJECT",
+        properties: {
+          start: { type: "NUMBER" },
+          title: { type: "STRING" },
+        },
+        required: ["start", "title"],
+      },
+    },
+  },
+  required: ["chapters"],
+};
+
+function formatClock(seconds: number) {
+  const total = Math.max(0, Math.floor(seconds));
+  const mins = Math.floor(total / 60);
+  const secs = total % 60;
+  return `${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
+}
+
+export function formatTimestampedTranscript(
+  segments: Array<{ start: number; text: string }>,
+) {
+  return segments
+    .map((segment) => {
+      const text = segment.text.trim();
+      if (!text) {
+        return null;
+      }
+      return `[${formatClock(segment.start)} | ${segment.start}] ${text}`;
+    })
+    .filter((line): line is string => line != null)
+    .join("\n");
+}
+
+export async function generateChaptersJsonFromTranscript(
+  transcriptText: string,
+): Promise<unknown> {
+  const response = await fetch(GEMINI_URL, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-goog-api-key": getApiKey(),
+    },
+    body: JSON.stringify({
+      systemInstruction: {
+        parts: [{ text: CHAPTERS_PROMPT }],
+      },
+      contents: [
+        {
+          role: "user",
+          parts: [{ text: `Timestamped transcript:\n${transcriptText}` }],
+        },
+      ],
+      generationConfig: {
+        responseMimeType: "application/json",
+        responseSchema: CHAPTERS_SCHEMA,
+      },
+    }),
+  });
+
+  const payload = (await response.json().catch(() => null)) as {
+    error?: { message?: string };
+    candidates?: Array<{
+      content?: { parts?: Array<{ text?: string }> };
+    }>;
+  } | null;
+
+  if (!response.ok) {
+    throw new Error(payload?.error?.message || "Gemini request failed");
+  }
+
+  const text = payload?.candidates?.[0]?.content?.parts?.[0]?.text;
+  if (!text) {
+    throw new Error("Gemini returned empty chapters");
+  }
+
+  try {
+    return JSON.parse(text) as unknown;
+  } catch {
+    throw new Error("Gemini returned chapter JSON that could not be parsed");
+  }
+}

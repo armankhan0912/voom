@@ -8,6 +8,7 @@ import {
   timestamp,
   uuid,
 } from "drizzle-orm/pg-core";
+import type { Chapter } from "@/lib/chapters/types";
 import type { TranscriptSegment } from "@/lib/transcription/types";
 
 export const videoStatus = pgEnum("video_status", [
@@ -24,6 +25,13 @@ export const transcriptStatus = pgEnum("transcript_status", [
 ]);
 
 export const summaryStatus = pgEnum("summary_status", [
+  "pending",
+  "processing",
+  "ready",
+  "failed",
+]);
+
+export const chapterStatus = pgEnum("chapter_status", [
   "pending",
   "processing",
   "ready",
@@ -82,6 +90,21 @@ export const summaries = pgTable("summaries", {
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 
+export const chapters = pgTable("chapters", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  videoId: uuid("video_id")
+    .notNull()
+    .references(() => videos.id, { onDelete: "cascade" })
+    .unique(),
+  status: chapterStatus("status").notNull(),
+  error: text("error"),
+  chapters: jsonb("chapters").$type<Chapter[] | null>(),
+  provider: text("provider").notNull().default("gemini"),
+  model: text("model"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
 export const usersRelations = relations(users, ({ many }) => ({
   videos: many(videos),
 }));
@@ -99,6 +122,10 @@ export const videosRelations = relations(videos, ({ one }) => ({
     fields: [videos.id],
     references: [summaries.videoId],
   }),
+  chapters: one(chapters, {
+    fields: [videos.id],
+    references: [chapters.videoId],
+  }),
 }));
 
 export const transcriptsRelations = relations(transcripts, ({ one }) => ({
@@ -111,6 +138,13 @@ export const transcriptsRelations = relations(transcripts, ({ one }) => ({
 export const summariesRelations = relations(summaries, ({ one }) => ({
   video: one(videos, {
     fields: [summaries.videoId],
+    references: [videos.id],
+  }),
+}));
+
+export const chaptersRelations = relations(chapters, ({ one }) => ({
+  video: one(videos, {
+    fields: [chapters.videoId],
     references: [videos.id],
   }),
 }));
