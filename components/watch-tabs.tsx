@@ -1,14 +1,18 @@
 "use client";
 
 import { useState } from "react";
+import { Summary } from "@/components/summary";
+import { Transcript } from "@/components/transcript";
 
-export function WatchTabs() {
-  const [tab, setTab] = useState<"summary" | "chapters">("summary");
+type WatchTab = "summary" | "transcript" | "chapters";
+
+export function WatchTabs({ videoId }: { videoId: string }) {
+  const [tab, setTab] = useState<WatchTab>("transcript");
 
   return (
     <div>
       <div className="flex gap-6 border-b border-voom-line text-sm">
-        {(["summary", "chapters"] as const).map((id) => (
+        {(["summary", "transcript", "chapters"] as const).map((id) => (
           <button
             key={id}
             type="button"
@@ -19,15 +23,26 @@ export function WatchTabs() {
             }`}
             onClick={() => setTab(id)}
           >
-            {id === "summary" ? "Summary" : "Chapters"}
+            {id === "summary"
+              ? "Summary"
+              : id === "transcript"
+                ? "Transcript"
+                : "Chapters"}
           </button>
         ))}
       </div>
-      <p className="mt-4 text-sm text-voom-muted">
-        {tab === "summary"
-          ? "Summary is coming soon. This recording does not have a generated recap yet."
-          : "Chapters are coming soon. You will be able to jump through this Voom here."}
-      </p>
+      {tab === "chapters" ? (
+        <p className="mt-4 text-sm text-voom-muted">
+          Chapters are coming soon. You will be able to jump through this Voom
+          here.
+        </p>
+      ) : null}
+      <div className={tab === "summary" ? undefined : "hidden"}>
+        <Summary videoId={videoId} />
+      </div>
+      <div className={tab === "transcript" ? undefined : "hidden"}>
+        <Transcript videoId={videoId} />
+      </div>
     </div>
   );
 }

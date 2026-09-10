@@ -23,6 +23,13 @@ export const transcriptStatus = pgEnum("transcript_status", [
   "failed",
 ]);
 
+export const summaryStatus = pgEnum("summary_status", [
+  "pending",
+  "processing",
+  "ready",
+  "failed",
+]);
+
 export const users = pgTable("users", {
   id: uuid("id").primaryKey().defaultRandom(),
   name: text("name"),
@@ -59,6 +66,22 @@ export const transcripts = pgTable("transcripts", {
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 
+export const summaries = pgTable("summaries", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  videoId: uuid("video_id")
+    .notNull()
+    .references(() => videos.id, { onDelete: "cascade" })
+    .unique(),
+  status: summaryStatus("status").notNull(),
+  error: text("error"),
+  overview: text("overview"),
+  keyPoints: jsonb("key_points").$type<string[] | null>(),
+  provider: text("provider").notNull().default("gemini"),
+  model: text("model"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
 export const usersRelations = relations(users, ({ many }) => ({
   videos: many(videos),
 }));
@@ -72,11 +95,22 @@ export const videosRelations = relations(videos, ({ one }) => ({
     fields: [videos.id],
     references: [transcripts.videoId],
   }),
+  summary: one(summaries, {
+    fields: [videos.id],
+    references: [summaries.videoId],
+  }),
 }));
 
 export const transcriptsRelations = relations(transcripts, ({ one }) => ({
   video: one(videos, {
     fields: [transcripts.videoId],
+    references: [videos.id],
+  }),
+}));
+
+export const summariesRelations = relations(summaries, ({ one }) => ({
+  video: one(videos, {
+    fields: [summaries.videoId],
     references: [videos.id],
   }),
 }));

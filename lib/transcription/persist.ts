@@ -1,6 +1,8 @@
+import { after } from "next/server";
 import { eq } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { transcripts } from "@/lib/db/schema";
+import { startSummary } from "@/lib/summary/start";
 import {
   getAssemblyAISentenceSegments,
   getAssemblyAITranscript,
@@ -20,6 +22,12 @@ export async function markTranscriptFailedByVideoId(
     .where(eq(transcripts.videoId, videoId));
 }
 
+function scheduleSummary(videoId: string) {
+  after(() => {
+    void startSummary(videoId);
+  });
+}
+
 export async function persistAssemblyAIResult(providerJobId: string) {
   const rows = await db
     .select()
@@ -28,7 +36,12 @@ export async function persistAssemblyAIResult(providerJobId: string) {
     .limit(1);
 
   const transcript = rows[0];
-  if (!transcript || transcript.status === "ready") {
+  if (!transcript) {
+    return;
+  }
+
+  if (transcript.status === "ready") {
+    scheduleSummary(transcript.videoId);
     return;
   }
 
@@ -63,6 +76,8 @@ export async function persistAssemblyAIResult(providerJobId: string) {
         updatedAt: new Date(),
       })
       .where(eq(transcripts.providerJobId, providerJobId));
+
+    scheduleSummary(transcript.videoId);
   } catch (caught) {
     const message =
       caught instanceof Error ? caught.message : "Could not save transcript";

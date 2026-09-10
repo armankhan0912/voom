@@ -5,6 +5,7 @@ import { RecordingTitle } from "@/components/recording-title";
 import { ShareButton } from "@/components/share-button";
 import { VideoPlayer } from "@/components/video-player";
 import { WatchHeader } from "@/components/watch-header";
+import { WatchPlayerProvider } from "@/components/watch-player-context";
 import { WatchTabs } from "@/components/watch-tabs";
 import { getCurrentDbUser } from "@/lib/current-user";
 import { db } from "@/lib/db";
@@ -58,7 +59,8 @@ export default async function VoomPage({
   const url = shareUrl(video.id);
 
   return (
-    <div className="min-h-screen bg-voom-paper">
+    <WatchPlayerProvider>
+      <div className="min-h-screen bg-voom-paper">
       <WatchHeader
         user={viewer ? { name: viewer.name, email: viewer.email } : null}
       />
@@ -117,9 +119,10 @@ export default async function VoomPage({
         </section>
 
         <section className="rounded-3xl bg-voom-surface p-5 lg:min-h-[28rem]">
-          <WatchTabs />
+          <WatchTabs videoId={video.id} />
         </section>
       </main>
-    </div>
+      </div>
+    </WatchPlayerProvider>
   );
 }

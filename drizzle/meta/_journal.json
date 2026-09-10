@@ -15,6 +15,13 @@
       "when": 1789039115303,
       "tag": "0001_furry_the_fury",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1789045809399,
+      "tag": "0002_tearful_puck",
+      "breakpoints": true
     }
   ]
 }
