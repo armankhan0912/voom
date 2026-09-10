@@ -12,8 +12,17 @@ function isPublicRoute(request: Request, pathname: string) {
     return true;
   }
 
+  if (pathname === "/api/webhooks/assemblyai") {
+    return true;
+  }
+
+  if (request.method === "GET" && /^\/api\/videos\/[^/]+$/.test(pathname)) {
+    return true;
+  }
+
   return (
-    request.method === "GET" && /^\/api\/videos\/[^/]+$/.test(pathname)
+    request.method === "GET" &&
+    /^\/api\/videos\/[^/]+\/transcript$/.test(pathname)
   );
 }
 

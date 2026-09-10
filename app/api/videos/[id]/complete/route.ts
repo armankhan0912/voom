@@ -1,8 +1,10 @@
+import { after } from "next/server";
 import { and, eq } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { videos } from "@/lib/db/schema";
 import { getCurrentDbUser } from "@/lib/current-user";
 import { objectExists } from "@/lib/r2/client";
+import { startTranscription } from "@/lib/transcription/start";
 import { serializeVideo, VIDEO_ID_PATTERN } from "@/lib/videos";
 
 export async function POST(
@@ -77,5 +79,13 @@ export async function POST(
     .where(eq(videos.id, video.id))
     .returning();
 
-  return Response.json({ video: serializeVideo(updated[0]) });
+  const saved = updated[0];
+
+  if (!failed) {
+    after(() => {
+      void startTranscription(saved.id);
+    });
+  }
+
+  return Response.json({ video: serializeVideo(saved) });
 }
