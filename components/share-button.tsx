@@ -25,10 +25,10 @@ export function ShareButton({
 
   const className =
     variant === "primary"
-      ? "rounded-full bg-voom-ink px-4 py-2 text-sm font-medium text-white hover:bg-voom-accent-hover"
+      ? "voom-btn-primary"
       : variant === "chip"
-        ? "rounded-full border border-voom-line bg-voom-surface px-3 py-1.5 text-sm hover:bg-voom-paper"
-        : "rounded-full px-2 py-1 text-sm text-voom-muted hover:text-voom-ink";
+        ? "voom-btn-secondary px-3 py-1.5"
+        : "voom-btn-ghost px-2 py-1 text-voom-muted";
 
   return (
     <button type="button" className={className} onClick={() => void copy()}>

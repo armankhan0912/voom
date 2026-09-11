@@ -64,7 +64,7 @@ export function RecordingTitle({
       }}
       className={
         className ??
-        "w-full min-w-0 bg-transparent font-medium outline-none"
+        "w-full min-w-0 bg-transparent font-medium outline-none focus:text-voom-ink"
       }
     />
   );

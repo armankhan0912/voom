@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { RecordLink } from "@/components/record-link";
 import { RecordingGrid } from "@/components/recording-grid";
 import type { RecordingListItem } from "@/lib/recording-display";
 
@@ -52,18 +53,21 @@ export function VoomsLibrary({ recordings }: { recordings: RecordingListItem[] }
 
   return (
     <main className="px-6 py-10 md:px-10">
-      <h1 className="text-3xl font-semibold tracking-tight">My Vooms</h1>
-      <p className="mt-2 text-voom-muted">All your recordings in one place.</p>
+      <div className="flex flex-col gap-6 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <h1 className="text-3xl font-semibold tracking-tight">Your Vooms</h1>
+          <p className="mt-2 text-voom-muted">Your recordings, all in one place.</p>
+        </div>
+        <RecordLink className="voom-btn-primary">Record a Voom</RecordLink>
+      </div>
 
-      <label className="mt-8 flex items-center rounded-full bg-voom-surface px-4 py-2.5">
-        <input
-          className="w-full bg-transparent outline-none"
-          placeholder="Search vooms..."
-          value={query}
-          onChange={(event) => setQuery(event.target.value)}
-          aria-label="Search vooms"
-        />
-      </label>
+      <input
+        className="voom-input mt-8"
+        placeholder="Search vooms..."
+        value={query}
+        onChange={(event) => setQuery(event.target.value)}
+        aria-label="Search vooms"
+      />
 
       <div className="mt-5 flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap gap-2">
@@ -71,10 +75,10 @@ export function VoomsLibrary({ recordings }: { recordings: RecordingListItem[] }
             <button
               key={tab.id}
               type="button"
-              className={`rounded-full px-3 py-1.5 text-sm ${
+              className={`rounded-[10px] px-3 py-1.5 text-sm transition-colors duration-200 ${
                 range === tab.id
-                  ? "bg-voom-ink text-white"
-                  : "bg-voom-surface text-voom-muted"
+                  ? "bg-voom-soft font-medium text-voom-accent"
+                  : "bg-voom-surface text-voom-muted hover:bg-voom-soft"
               }`}
               onClick={() => setRange(tab.id)}
             >
@@ -85,7 +89,7 @@ export function VoomsLibrary({ recordings }: { recordings: RecordingListItem[] }
         <label className="text-sm text-voom-muted">
           Sort by:{" "}
           <select
-            className="rounded-full bg-voom-surface px-2 py-1 text-voom-ink"
+            className="voom-input w-auto px-2 py-1"
             value={sort}
             onChange={(event) => setSort(event.target.value as Sort)}
           >

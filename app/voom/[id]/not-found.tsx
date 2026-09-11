@@ -10,7 +10,7 @@ export default function VoomNotFound() {
         <p className="mt-2 text-voom-muted">
           This Voom does not exist or is not available.
         </p>
-        <Link href="/" className="mt-6 inline-block text-sm">
+        <Link href="/" className="voom-btn-ghost mt-6 inline-block text-sm">
           Back to Voom
         </Link>
       </main>

@@ -1,15 +1,17 @@
 @import "tailwindcss";
 
 @theme {
-  --font-sans: ui-sans-serif, system-ui, sans-serif;
-  --color-voom-ink: #1a1a1a;
-  --color-voom-muted: #6b6b6b;
-  --color-voom-paper: #f5f5f0;
-  --color-voom-surface: #ffffff;
-  --color-voom-line: #e8e8e2;
-  --color-voom-accent: #1a1a1a;
-  --color-voom-accent-hover: #333333;
-  --color-voom-sidebar: #1a1a1a;
+  --font-sans: var(--font-voom), ui-sans-serif, system-ui, sans-serif;
+  --color-voom-ink: #2b2118;
+  --color-voom-muted: #806f61;
+  --color-voom-paper: #f7efe5;
+  --color-voom-surface: #fffcf7;
+  --color-voom-line: #e7dccf;
+  --color-voom-accent: #f97316;
+  --color-voom-accent-hover: #ea580c;
+  --color-voom-sidebar: #fffcf7;
+  --color-voom-soft: #fff1e6;
+  --color-voom-active: #fce4d2;
 }
 
 @layer base {
@@ -29,6 +31,93 @@
   select,
   input {
     font: inherit;
+  }
+}
+
+@layer components {
+  .voom-btn-primary {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 10px;
+    background: var(--color-voom-accent);
+    padding: 0.625rem 1.1rem;
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: #ffffff;
+    transition: background-color 180ms ease, transform 180ms ease;
+  }
+
+  .voom-btn-primary:hover {
+    background: var(--color-voom-accent-hover);
+  }
+
+  .voom-btn-secondary {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 10px;
+    border: 1px solid var(--color-voom-line);
+    background: var(--color-voom-surface);
+    padding: 0.625rem 1.1rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: var(--color-voom-ink);
+    transition: background-color 180ms ease, border-color 180ms ease;
+  }
+
+  .voom-btn-secondary:hover {
+    background: var(--color-voom-soft);
+  }
+
+  .voom-btn-ghost {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 10px;
+    background: transparent;
+    padding: 0.5rem 0.85rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: var(--color-voom-ink);
+    transition: background-color 180ms ease, color 180ms ease;
+  }
+
+  .voom-btn-ghost:hover {
+    background: var(--color-voom-soft);
+  }
+
+  .voom-card {
+    overflow: hidden;
+    border-radius: 16px;
+    border: 1px solid var(--color-voom-line);
+    background: var(--color-voom-surface);
+    box-shadow: 0 1px 2px rgba(43, 33, 24, 0.04);
+    transition: box-shadow 180ms ease, border-color 180ms ease, transform 180ms ease;
+  }
+
+  .voom-input {
+    width: 100%;
+    border-radius: 10px;
+    border: 1px solid var(--color-voom-line);
+    background: var(--color-voom-surface);
+    padding: 0.7rem 0.95rem;
+    color: var(--color-voom-ink);
+    outline: none;
+    transition: border-color 180ms ease, box-shadow 180ms ease;
+  }
+
+  .voom-input::placeholder {
+    color: var(--color-voom-muted);
+  }
+
+  .voom-input:focus {
+    border-color: var(--color-voom-accent);
+    box-shadow: 0 0 0 3px rgba(249, 115, 22, 0.18);
+  }
+
+  .voom-watch-video::-webkit-media-controls-timeline {
+    display: none;
   }
 }
 

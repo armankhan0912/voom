@@ -8,14 +8,20 @@ export async function SiteHeader() {
 
   return (
     <header className="flex items-center justify-between border-b border-voom-line bg-voom-surface px-6 py-4">
-      <Link href="/" className="font-semibold">
+      <Link href="/" className="font-semibold tracking-tight">
         Voom
       </Link>
       {user ? (
-        <nav className="flex items-center gap-4 text-sm">
-          <Link href="/">Home</Link>
-          <Link href="/vooms">My Vooms</Link>
-          <Link href="/record">Record</Link>
+        <nav className="flex items-center gap-1 text-sm">
+          <Link href="/" className="voom-btn-ghost">
+            Home
+          </Link>
+          <Link href="/vooms" className="voom-btn-ghost">
+            My Vooms
+          </Link>
+          <Link href="/record" className="voom-btn-ghost">
+            Record
+          </Link>
           <SignOutButton />
         </nav>
       ) : (

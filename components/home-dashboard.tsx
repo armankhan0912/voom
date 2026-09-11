@@ -24,23 +24,21 @@ export async function HomeDashboard({
             Record a video and share it instantly.
           </p>
         </div>
-        <RecordLink className="inline-flex rounded-full bg-voom-ink px-5 py-2.5 text-sm font-medium text-white hover:bg-voom-accent-hover">
-          Record a Voom
-        </RecordLink>
+        <RecordLink className="voom-btn-primary">Record a Voom</RecordLink>
       </div>
 
       <section className="mt-12">
         <div className="mb-5 flex items-end justify-between">
           <h2 className="text-lg font-semibold">Recent Vooms</h2>
           {recordings.length > 0 ? (
-            <Link href="/vooms" className="text-sm text-voom-muted hover:text-voom-ink">
+            <Link href="/vooms" className="text-sm text-voom-muted transition-colors duration-200 hover:text-voom-accent">
               View all
             </Link>
           ) : null}
         </div>
         {recordings.length === 0 ? (
           <EmptyState
-            title="No Vooms yet"
+            title="Your Vooms will appear here"
             description="Record your first video and share it with a link."
             actionHref="/record"
             actionLabel="Record a Voom"

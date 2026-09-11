@@ -106,11 +106,11 @@ export function Chapters({ videoId }: { videoId: string }) {
   }
 
   return (
-    <div className="mt-4 max-h-[28rem] overflow-y-auto pr-1 text-sm">
+    <div className="mt-4 pr-1 text-sm">
       {items.length === 0 ? (
         <p className="text-voom-muted">No chapters for this recording.</p>
       ) : (
-        <ol className="space-y-3">
+        <ol className="space-y-1">
           {items.map((chapter) => {
             const isActive = activeStart === chapter.start;
 
@@ -118,20 +118,20 @@ export function Chapters({ videoId }: { videoId: string }) {
               <li key={chapter.start}>
                 <button
                   type="button"
-                  className={`flex w-full items-baseline gap-4 text-left ${
-                    isActive
-                      ? "text-voom-ink"
-                      : "text-voom-muted hover:text-voom-ink"
+                  className={`flex w-full items-baseline gap-4 rounded-[10px] px-2 py-2.5 text-left transition-colors duration-200 ${
+                    isActive ? "bg-voom-active" : "hover:bg-voom-soft"
                   }`}
                   onClick={() => {
                     setActiveStart(chapter.start);
                     seekTo(chapter.start);
                   }}
                 >
-                  <span className="shrink-0 font-medium">
+                  <span className="w-12 shrink-0 text-sm font-semibold text-voom-accent">
                     {formatTimestamp(chapter.start)}
                   </span>
-                  <span className="min-w-0 leading-6">{chapter.title}</span>
+                  <span className="min-w-0 font-medium leading-6 text-voom-ink">
+                    {chapter.title}
+                  </span>
                 </button>
               </li>
             );

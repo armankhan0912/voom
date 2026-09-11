@@ -218,14 +218,24 @@ function applyState(payload) {
   }
 
   if (pauseButton) {
-    pauseButton.textContent = payload.state === "paused" ? "Resume" : "Pause";
+    const paused = payload.state === "paused";
+    pauseButton.classList.toggle("is-resume", paused);
+    pauseButton.title = paused ? "Resume" : "Pause";
+    pauseButton.setAttribute("aria-label", paused ? "Resume" : "Pause");
     pauseButton.disabled = payload.state === "stopping";
   }
 
   if (stopButton) {
-    stopButton.textContent = payload.state === "stopping" ? "Uploading…" : "Stop";
+    stopButton.title =
+      payload.state === "stopping" ? "Uploading…" : "Stop recording";
+    stopButton.setAttribute(
+      "aria-label",
+      payload.state === "stopping" ? "Uploading…" : "Stop recording",
+    );
     stopButton.disabled = payload.state === "stopping";
   }
+
+  toolbar?.classList.toggle("is-paused", payload.state === "paused");
 
   const showCamera =
     payload.cameraEnabled &&
@@ -338,6 +348,10 @@ function enableDrag(root) {
       return;
     }
 
+    if (event.target.closest("button")) {
+      return;
+    }
+
     active = {
       pointerId: event.pointerId,
       startX: event.clientX,
@@ -442,7 +456,7 @@ pauseButton?.addEventListener("click", (event) => {
     return;
   }
 
-  const resume = pauseButton.textContent === "Resume";
+  const resume = pauseButton.classList.contains("is-resume");
   chrome.runtime.sendMessage({
     type: "voom-overlay-control",
     action: resume ? "resume" : "pause",

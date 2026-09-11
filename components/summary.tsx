@@ -98,17 +98,23 @@ export function Summary({ videoId }: { videoId: string }) {
   }
 
   return (
-    <div className="mt-4 max-h-[28rem] space-y-5 overflow-y-auto pr-1 text-sm">
+    <div className="mt-4 space-y-6 pr-1 text-sm">
       {overview ? (
         <section>
-          <h3 className="font-medium">Overview</h3>
-          <p className="mt-2 leading-6">{overview}</p>
+          <h3 className="text-xs font-semibold tracking-wide text-voom-muted uppercase">
+            Overview
+          </h3>
+          <p className="mt-2 rounded-[10px] bg-voom-soft px-3 py-3 leading-7 text-voom-ink">
+            {overview}
+          </p>
         </section>
       ) : null}
       {keyPoints.length > 0 ? (
         <section>
-          <h3 className="font-medium">Key points</h3>
-          <ul className="mt-2 list-disc space-y-2 pl-5 leading-6">
+          <h3 className="text-xs font-semibold tracking-wide text-voom-muted uppercase">
+            Key points
+          </h3>
+          <ul className="mt-2 list-disc space-y-2 pl-5 leading-7 text-voom-ink">
             {keyPoints.map((point, index) => (
               <li key={`${index}-${point.slice(0, 24)}`}>{point}</li>
             ))}

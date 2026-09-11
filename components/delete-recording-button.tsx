@@ -49,7 +49,7 @@ export function DeleteRecordingButton({
       onClick={() => void remove()}
       className={
         className ??
-        "rounded-full px-2 py-1 text-sm text-voom-muted hover:text-voom-ink disabled:opacity-50"
+        "voom-btn-ghost px-2 py-1 text-sm text-voom-muted disabled:opacity-50"
       }
     >
       {deleting ? "Deleting…" : "Delete"}

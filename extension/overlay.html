@@ -10,9 +10,23 @@
       <video id="camera" autoplay muted playsinline></video>
     </div>
     <div id="toolbar" class="hidden">
+      <span id="rec-dot" aria-hidden="true"></span>
       <span id="timer">0:00</span>
-      <button id="pause" type="button">Pause</button>
-      <button id="stop" type="button">Stop</button>
+      <span class="divider" aria-hidden="true"></span>
+      <button id="pause" type="button" title="Pause" aria-label="Pause">
+        <svg class="icon-pause" viewBox="0 0 16 16" aria-hidden="true">
+          <rect x="3.5" y="2.5" width="3" height="11" rx="1" />
+          <rect x="9.5" y="2.5" width="3" height="11" rx="1" />
+        </svg>
+        <svg class="icon-play" viewBox="0 0 16 16" aria-hidden="true">
+          <path d="M5 3.2v9.6L13 8 5 3.2Z" />
+        </svg>
+      </button>
+      <button id="stop" type="button" title="Stop recording" aria-label="Stop recording">
+        <svg viewBox="0 0 16 16" aria-hidden="true">
+          <rect x="3.5" y="3.5" width="9" height="9" rx="1.5" />
+        </svg>
+      </button>
     </div>
     <script src="overlay.js"></script>
   </body>

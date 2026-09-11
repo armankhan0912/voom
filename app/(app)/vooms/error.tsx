@@ -12,7 +12,7 @@ export default function VoomsError({
       <p className="mt-2 text-voom-muted">Please try again.</p>
       <button
         type="button"
-        className="mt-4 rounded-lg bg-voom-ink px-3 py-2 text-sm text-white"
+        className="voom-btn-primary mt-4"
         onClick={reset}
       >
         Try again

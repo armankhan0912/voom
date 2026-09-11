@@ -32,11 +32,13 @@ export function Transcript({ videoId }: { videoId: string }) {
   const { seekTo } = useWatchPlayer();
   const [status, setStatus] = useState<TranscriptStatus | null>(null);
   const [segments, setSegments] = useState<TranscriptSegment[]>([]);
+  const [activeStart, setActiveStart] = useState<number | null>(null);
   const [loadError, setLoadError] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
     let timeoutId = 0;
+    setActiveStart(null);
 
     async function load() {
       try {
@@ -110,20 +112,31 @@ export function Transcript({ videoId }: { videoId: string }) {
   }
 
   return (
-    <div className="mt-4 max-h-[28rem] overflow-y-auto pr-1">
-      <ol className="space-y-4">
-        {segments.map((segment, index) => (
-          <li key={`${segment.start}-${index}`} className="flex gap-4 text-sm">
-            <button
-              type="button"
-              className="shrink-0 font-medium text-voom-muted hover:text-voom-ink"
-              onClick={() => seekTo(segment.start)}
-            >
-              {formatTimestamp(segment.start)}
-            </button>
-            <p className="min-w-0 leading-6">{segment.text}</p>
-          </li>
-        ))}
+    <div className="mt-4 pr-1">
+      <ol className="space-y-1">
+        {segments.map((segment, index) => {
+          const isActive = activeStart === segment.start;
+
+          return (
+            <li key={`${segment.start}-${index}`}>
+              <button
+                type="button"
+                className={`flex w-full gap-4 rounded-[10px] px-2 py-2.5 text-left text-sm transition-colors duration-200 ${
+                  isActive ? "bg-voom-active" : "hover:bg-voom-soft"
+                }`}
+                onClick={() => {
+                  setActiveStart(segment.start);
+                  seekTo(segment.start);
+                }}
+              >
+                <span className="w-12 shrink-0 text-sm font-semibold text-voom-accent">
+                  {formatTimestamp(segment.start)}
+                </span>
+                <span className="min-w-0 leading-6 text-voom-ink">{segment.text}</span>
+              </button>
+            </li>
+          );
+        })}
       </ol>
     </div>
   );

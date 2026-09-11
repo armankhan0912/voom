@@ -2,7 +2,6 @@ import { notFound } from "next/navigation";
 import { eq } from "drizzle-orm";
 import { DeleteRecordingButton } from "@/components/delete-recording-button";
 import { RecordingTitle } from "@/components/recording-title";
-import { ShareButton } from "@/components/share-button";
 import { VideoPlayer } from "@/components/video-player";
 import { WatchHeader } from "@/components/watch-header";
 import { WatchPlayerProvider } from "@/components/watch-player-context";
@@ -60,67 +59,56 @@ export default async function VoomPage({
 
   return (
     <WatchPlayerProvider>
-      <div className="min-h-screen bg-voom-paper">
+      <div className="flex min-h-svh flex-col bg-voom-paper md:h-svh md:overflow-hidden">
       <WatchHeader
         user={viewer ? { name: viewer.name, email: viewer.email } : null}
+        shareUrl={video.status === "ready" ? url : undefined}
       />
-      <main className="mx-auto grid max-w-7xl gap-8 px-6 py-6 lg:grid-cols-2 lg:items-start">
-        <section>
-          {playbackUrl ? (
-            <VideoPlayer src={playbackUrl} title={video.title} />
-          ) : (
-            <div className="rounded-3xl bg-voom-surface p-8 text-voom-muted">
-              {video.status === "failed"
-                ? "This recording failed to upload."
-                : "This recording is still processing."}
-            </div>
-          )}
+      <main className="mx-auto flex min-h-0 w-full max-w-[1320px] flex-1 flex-col px-5 py-4">
+        <div className="grid min-h-0 flex-1 grid-cols-1 gap-8 md:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)] lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+          <section className="flex min-w-0 flex-col">
+            {playbackUrl ? (
+              <VideoPlayer src={playbackUrl} title={video.title} />
+            ) : (
+              <div className="rounded-[16px] border border-voom-line bg-voom-surface p-8 text-voom-muted">
+                {video.status === "failed"
+                  ? "This recording failed to upload."
+                  : "This recording is still processing."}
+              </div>
+            )}
 
-          <div className="mt-4 flex flex-wrap gap-2">
-            {video.status === "ready" ? (
-              <ShareButton url={url} label="Copy link" variant="chip" />
-            ) : null}
             {isOwner ? (
-              <DeleteRecordingButton
-                id={video.id}
-                redirectTo="/"
-                className="rounded-full border border-voom-line bg-voom-surface px-3 py-1.5 text-sm hover:bg-voom-paper"
-              />
+              <div className="mt-4 shrink-0">
+                <DeleteRecordingButton
+                  id={video.id}
+                  redirectTo="/"
+                  className="voom-btn-secondary px-3 py-1.5"
+                />
+              </div>
             ) : null}
-          </div>
 
-          <div className="mt-6 rounded-3xl bg-voom-surface p-5">
-            <h2 className="text-sm font-medium">Video details</h2>
-            <dl className="mt-4 space-y-3 text-sm">
-              <div>
-                <dt className="text-voom-muted">Title</dt>
-                <dd className="mt-1">
-                  {isOwner ? (
-                    <RecordingTitle
-                      id={video.id}
-                      title={video.title}
-                      className="w-full min-w-0 bg-transparent font-medium outline-none"
-                    />
-                  ) : (
-                    video.title
-                  )}
-                </dd>
-              </div>
-              <div>
-                <dt className="text-voom-muted">Created</dt>
-                <dd className="mt-1">{formatDate(video.createdAt)}</dd>
-              </div>
-              <div>
-                <dt className="text-voom-muted">Duration</dt>
-                <dd className="mt-1">{formatDuration(video.duration)}</dd>
-              </div>
-            </dl>
-          </div>
-        </section>
+            <div className="mt-6 shrink-0">
+              {isOwner ? (
+                <RecordingTitle
+                  id={video.id}
+                  title={video.title}
+                  className="w-full min-w-0 bg-transparent text-lg font-semibold tracking-tight outline-none"
+                />
+              ) : (
+                <h2 className="text-lg font-semibold tracking-tight">{video.title}</h2>
+              )}
+              <p className="mt-2 text-sm text-voom-muted">
+                {formatDate(video.createdAt)}
+                <span className="mx-2 text-voom-line">·</span>
+                {formatDuration(video.duration)}
+              </p>
+            </div>
+          </section>
 
-        <section className="rounded-3xl bg-voom-surface p-5 lg:min-h-[28rem]">
-          <WatchTabs videoId={video.id} />
-        </section>
+          <section className="voom-card flex min-h-0 flex-col overflow-hidden p-5 max-md:max-h-[min(32rem,60vh)] md:h-full">
+            <WatchTabs videoId={video.id} />
+          </section>
+        </div>
       </main>
       </div>
     </WatchPlayerProvider>

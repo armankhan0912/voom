@@ -11,10 +11,10 @@ export function SignInButton({
 }) {
   const className =
     variant === "ghost"
-      ? "text-sm text-voom-ink hover:opacity-70"
+      ? "voom-btn-ghost"
       : variant === "light"
-        ? "rounded-full bg-white px-4 py-2 text-sm font-medium text-voom-ink"
-        : "rounded-full bg-voom-ink px-4 py-2.5 text-sm font-medium text-white hover:bg-voom-accent-hover";
+        ? "voom-btn-secondary"
+        : "voom-btn-primary";
 
   return (
     <ClerkSignInButton

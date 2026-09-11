@@ -16,7 +16,7 @@ export function RecordingCard({
   showOwner?: boolean;
 }) {
   return (
-    <article className="overflow-hidden rounded-2xl bg-voom-surface">
+    <article className="voom-card hover:-translate-y-0.5 hover:border-voom-accent/30 hover:shadow-[0_8px_24px_rgba(43,33,24,0.06)]">
       <Link href={watchPath(recording.id)} className="block">
         <div className="relative aspect-video bg-voom-ink">
           {recording.playbackUrl ? (
@@ -32,7 +32,7 @@ export function RecordingCard({
               {recording.status === "failed" ? "Failed" : "Processing"}
             </div>
           )}
-          <span className="absolute right-2.5 bottom-2.5 rounded-md bg-black/75 px-1.5 py-0.5 text-xs text-white">
+          <span className="absolute right-2.5 bottom-2.5 rounded-md bg-black/70 px-1.5 py-0.5 text-xs text-white">
             {formatDuration(recording.duration)}
           </span>
         </div>

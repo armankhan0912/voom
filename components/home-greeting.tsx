@@ -13,7 +13,7 @@ export function HomeGreeting({ name }: { name: string }) {
   }, []);
 
   return (
-    <h1 className="text-3xl font-semibold tracking-tight md:text-4xl">
+    <h1 className="text-3xl font-semibold tracking-tight md:text-[2rem]">
       {hello}, {name}
     </h1>
   );

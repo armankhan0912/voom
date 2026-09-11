@@ -2,6 +2,15 @@
   const existingBubble = document.getElementById("voom-overlay-bubble");
   const existingToolbar = document.getElementById("voom-overlay-toolbar");
   if (existingBubble && existingToolbar) {
+    existingToolbar.style.width = "196px";
+    existingToolbar.style.height = "44px";
+    existingToolbar.style.border = "0";
+    existingToolbar.style.borderRadius = "999px";
+    existingToolbar.style.background = "transparent";
+    existingToolbar.style.backgroundColor = "transparent";
+    existingToolbar.style.colorScheme = "none";
+    existingToolbar.style.boxShadow = "0 4px 16px rgba(40, 30, 20, 0.06)";
+    existingToolbar.style.overflow = "hidden";
     existingToolbar.style.display = "block";
     return;
   }
@@ -13,12 +22,34 @@
   const overlayUrl = chrome.runtime.getURL("overlay.html");
   const POS_KEY = "voom-overlay-pos";
 
+  const toolbarFrameStyle = [
+    "position:fixed",
+    "left:50%",
+    "bottom:24px",
+    "width:196px",
+    "height:44px",
+    "border:0",
+    "border-radius:999px",
+    "z-index:2147483647",
+    "pointer-events:none",
+    "background:transparent",
+    "background-color:transparent",
+    "color-scheme:none",
+    "box-shadow:0 4px 16px rgba(40, 30, 20, 0.06)",
+    "overflow:hidden",
+    "transform:translateX(-50%)",
+    "display:block",
+    "visibility:hidden",
+    "opacity:0",
+  ].join(";");
+
   function mountFrame(id, part, style) {
     const iframe = document.createElement("iframe");
     iframe.id = id;
     iframe.className = "voom-overlay-frame";
     iframe.src = `${overlayUrl}?part=${part}`;
     iframe.allow = "camera; microphone; autoplay; display-capture";
+    iframe.setAttribute("allowtransparency", "true");
     iframe.setAttribute("style", style);
     document.documentElement.appendChild(iframe);
     return iframe;
@@ -53,21 +84,7 @@
   const toolbarFrame = mountFrame(
     "voom-overlay-toolbar",
     "toolbar",
-    [
-      "position:fixed",
-      "left:50%",
-      "bottom:24px",
-      "width:280px",
-      "height:48px",
-      "border:0",
-      "z-index:2147483647",
-      "pointer-events:none",
-      "background:transparent",
-      "transform:translateX(-50%)",
-      "display:block",
-      "visibility:hidden",
-      "opacity:0",
-    ].join(";"),
+    toolbarFrameStyle,
   );
 
   const frames = {

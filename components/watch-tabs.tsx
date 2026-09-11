@@ -11,16 +11,16 @@ export function WatchTabs({ videoId }: { videoId: string }) {
   const [tab, setTab] = useState<WatchTab>("transcript");
 
   return (
-    <div>
-      <div className="flex gap-6 border-b border-voom-line text-sm">
+    <div className="flex h-full min-h-0 flex-col">
+      <div className="flex shrink-0 gap-6 border-b border-voom-line text-sm">
         {(["summary", "transcript", "chapters"] as const).map((id) => (
           <button
             key={id}
             type="button"
-            className={`-mb-px border-b-2 pb-2 ${
+            className={`-mb-px border-b-2 pb-2.5 capitalize transition-colors duration-200 ${
               tab === id
-                ? "border-voom-ink font-medium"
-                : "border-transparent text-voom-muted"
+                ? "border-voom-accent font-medium text-voom-ink"
+                : "border-transparent text-voom-muted hover:text-voom-accent"
             }`}
             onClick={() => setTab(id)}
           >
@@ -32,13 +32,25 @@ export function WatchTabs({ videoId }: { videoId: string }) {
           </button>
         ))}
       </div>
-      <div className={tab === "summary" ? undefined : "hidden"}>
+      <div
+        className={
+          tab === "summary" ? "min-h-0 flex-1 overflow-y-auto" : "hidden"
+        }
+      >
         <Summary videoId={videoId} />
       </div>
-      <div className={tab === "transcript" ? undefined : "hidden"}>
+      <div
+        className={
+          tab === "transcript" ? "min-h-0 flex-1 overflow-y-auto" : "hidden"
+        }
+      >
         <Transcript videoId={videoId} />
       </div>
-      <div className={tab === "chapters" ? undefined : "hidden"}>
+      <div
+        className={
+          tab === "chapters" ? "min-h-0 flex-1 overflow-y-auto" : "hidden"
+        }
+      >
         <Chapters videoId={videoId} />
       </div>
     </div>
