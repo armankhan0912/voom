@@ -158,7 +158,7 @@ export function VideoPlayer({
       className={
         embed
           ? "relative h-full w-full overflow-hidden bg-black"
-          : "relative overflow-hidden rounded-[20px] bg-black shadow-[0_8px_28px_rgba(43,33,24,0.12)]"
+            : "relative overflow-hidden rounded-[20px] bg-black shadow-[0_8px_28px_rgba(23,23,23,0.12)]"
       }
     >
       <video

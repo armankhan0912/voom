@@ -1,7 +1,9 @@
 import { ClerkProvider } from "@clerk/nextjs";
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
+import Script from "next/script";
 import { clerkAppearance } from "@/lib/clerk-appearance";
+import { SIDEBAR_INIT_SCRIPT } from "@/lib/sidebar";
 import "./globals.css";
 
 const inter = Inter({
@@ -19,6 +21,11 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html lang="en" className={inter.variable}>
       <body>
+        <Script
+          id="voom-sidebar-state"
+          strategy="beforeInteractive"
+          dangerouslySetInnerHTML={{ __html: SIDEBAR_INIT_SCRIPT }}
+        />
         <ClerkProvider appearance={clerkAppearance}>{children}</ClerkProvider>
       </body>
     </html>

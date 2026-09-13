@@ -15,7 +15,9 @@ export function AppShell({
     <RecordSetupProvider>
       <div className="min-h-screen bg-voom-paper">
         <AppSidebar name={name} email={email} />
-        <div className="md:pl-60">{children}</div>
+        <div className="voom-sidebar-main md:pl-[var(--voom-sidebar-width)]">
+          {children}
+        </div>
       </div>
     </RecordSetupProvider>
   );

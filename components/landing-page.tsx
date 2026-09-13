@@ -45,7 +45,7 @@ function ProductPreview() {
   return (
     <div className="voom-card mx-auto w-full max-w-[1040px] p-3 sm:p-4">
       <div className="grid gap-3 sm:gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,0.72fr)]">
-        <div className="relative aspect-video overflow-hidden rounded-[14px] bg-[#241b14]">
+        <div className="relative aspect-video overflow-hidden rounded-[14px] bg-voom-ink">
           <div className="absolute inset-0 flex items-center justify-center">
             <span className="flex size-14 items-center justify-center rounded-full bg-voom-surface/95">
               <svg
@@ -70,7 +70,7 @@ function ProductPreview() {
           </div>
         </div>
 
-        <div className="rounded-[14px] border border-voom-line bg-voom-paper/50 p-4">
+        <div className="rounded-[14px] border border-voom-line bg-voom-soft/40 p-4">
           <div className="flex gap-5 border-b border-voom-line pb-2.5 text-sm">
             <span className="-mb-[11px] border-b-2 border-voom-accent pb-2.5 font-medium text-voom-ink">
               Summary

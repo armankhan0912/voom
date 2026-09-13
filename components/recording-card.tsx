@@ -16,7 +16,7 @@ export function RecordingCard({
   showOwner?: boolean;
 }) {
   return (
-    <article className="voom-card hover:-translate-y-0.5 hover:border-voom-accent/30 hover:shadow-[0_8px_24px_rgba(43,33,24,0.06)]">
+    <article className="voom-card hover:-translate-y-0.5 hover:border-voom-accent/35 hover:shadow-[0_8px_24px_rgba(23,23,23,0.07)]">
       <Link href={watchPath(recording.id)} className="block">
         <div className="relative aspect-video bg-voom-ink">
           {recording.playbackUrl ? (

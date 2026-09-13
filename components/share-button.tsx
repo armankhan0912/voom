@@ -90,7 +90,7 @@ export function ShareButton({
             role="dialog"
             aria-modal="true"
             aria-labelledby={titleId}
-            className="voom-card w-full max-w-lg p-5 shadow-[0_16px_40px_rgba(43,33,24,0.16)]"
+            className="voom-card w-full max-w-lg p-5 shadow-[0_16px_40px_rgba(23,23,23,0.16)]"
           >
             <div className="flex items-start justify-between gap-3">
               <h2 id={titleId} className="text-lg font-semibold tracking-tight">

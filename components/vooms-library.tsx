@@ -75,10 +75,10 @@ export function VoomsLibrary({ recordings }: { recordings: RecordingListItem[] }
             <button
               key={tab.id}
               type="button"
-              className={`rounded-[10px] px-3 py-1.5 text-sm transition-colors duration-200 ${
+              className={`rounded-[10px] border px-3 py-1.5 text-sm transition-colors duration-200 ${
                 range === tab.id
-                  ? "bg-voom-soft font-medium text-voom-accent"
-                  : "bg-voom-surface text-voom-muted hover:bg-voom-soft"
+                  ? "border-voom-accent/25 bg-voom-soft font-medium text-voom-accent"
+                  : "border-voom-line bg-voom-surface text-voom-muted hover:bg-voom-soft hover:text-voom-ink"
               }`}
               onClick={() => setRange(tab.id)}
             >

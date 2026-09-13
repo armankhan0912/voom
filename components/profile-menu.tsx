@@ -68,7 +68,7 @@ export function ProfileMenu({
           id={menuId}
           role="menu"
           aria-labelledby={buttonId}
-          className="absolute top-full right-0 z-50 mt-2 w-56 max-w-[calc(100vw-2rem)] overflow-hidden rounded-[14px] border border-voom-line bg-voom-surface shadow-[0_12px_32px_rgba(43,33,24,0.12)]"
+          className="absolute top-full right-0 z-50 mt-2 w-56 max-w-[calc(100vw-2rem)] overflow-hidden rounded-[14px] border border-voom-line bg-voom-surface shadow-[0_12px_32px_rgba(23,23,23,0.12)]"
         >
           <div className="border-b border-voom-line px-3 py-2.5">
             <p className="text-xs text-voom-muted">Signed in as</p>
