@@ -193,10 +193,12 @@ export function AppSidebar({
           const content = (
             <>
               <Icon />
-              <span className="voom-collapse-hide whitespace-nowrap">
+              <span className="voom-nav-label whitespace-nowrap">
                 {link.label}
               </span>
-              <span className="voom-nav-tip">{link.label}</span>
+              <span className="voom-nav-tip" aria-hidden="true">
+                {link.label}
+              </span>
             </>
           );
 
@@ -235,14 +237,18 @@ export function AppSidebar({
             className="voom-nav-item flex h-9 w-9 items-center justify-center rounded-full bg-voom-soft text-xs font-medium text-voom-accent"
           >
             {initials(name, email)}
-            <span className="voom-nav-tip">{name || email}</span>
+            <span className="voom-nav-tip" aria-hidden="true">
+              {name || email}
+            </span>
           </div>
           <SignOutButton
             className="voom-nav-item flex h-9 w-9 items-center justify-center rounded-[10px] text-voom-muted transition-colors duration-200 hover:bg-voom-soft hover:text-voom-accent"
             label="Sign out"
           >
             <SignOutIcon />
-            <span className="voom-nav-tip">Sign out</span>
+            <span className="voom-nav-tip" aria-hidden="true">
+              Sign out
+            </span>
           </SignOutButton>
         </div>
       </div>

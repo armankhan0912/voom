@@ -1,6 +1,6 @@
 import { ClerkProvider } from "@clerk/nextjs";
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
+import { Inter, Inter_Tight } from "next/font/google";
 import Script from "next/script";
 import { clerkAppearance } from "@/lib/clerk-appearance";
 import { SIDEBAR_INIT_SCRIPT } from "@/lib/sidebar";
@@ -12,14 +12,25 @@ const inter = Inter({
   variable: "--font-voom",
 });
 
+const interTight = Inter_Tight({
+  subsets: ["latin"],
+  weight: ["500", "600", "700"],
+  variable: "--font-voom-display",
+});
+
 export const metadata: Metadata = {
   title: "Voom",
   description: "Async screen recording and sharing",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
+  // The sidebar script sets data-voom-sidebar on <html> before hydration.
   return (
-    <html lang="en" className={inter.variable}>
+    <html
+      lang="en"
+      className={`${inter.variable} ${interTight.variable}`}
+      suppressHydrationWarning
+    >
       <body>
         <Script
           id="voom-sidebar-state"

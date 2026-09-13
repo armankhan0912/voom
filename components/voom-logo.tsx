@@ -40,7 +40,7 @@ export function VoomWordmark({
       <VoomMark size={size * 1.5} priority={priority} />
       <span
         aria-hidden="true"
-        className="font-bold tracking-[-0.045em] text-voom-ink"
+        className="font-display font-bold tracking-[-0.045em] text-voom-ink"
         style={{ fontSize: size, marginLeft: size * -0.08 }}
       >
         oom
