@@ -52,6 +52,7 @@ export const videos = pgTable("videos", {
     .references(() => users.id),
   title: text("title").notNull(),
   s3Key: text("s3_key").notNull(),
+  r2UploadId: text("r2_upload_id"),
   status: videoStatus("status").notNull(),
   duration: integer("duration"),
   createdAt: timestamp("created_at").notNull().defaultNow(),

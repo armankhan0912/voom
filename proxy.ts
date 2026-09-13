@@ -7,7 +7,8 @@ function isPublicRoute(request: Request, pathname: string) {
     pathname.startsWith("/sign-in") ||
     pathname.startsWith("/sign-up") ||
     pathname.startsWith("/v/") ||
-    pathname.startsWith("/voom/")
+    pathname.startsWith("/voom/") ||
+    pathname.startsWith("/embed/")
   ) {
     return true;
   }

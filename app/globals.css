@@ -121,6 +121,13 @@
   }
 }
 
+html:has(#embed-root),
+html:has(#embed-root) body {
+  height: 100%;
+  overflow: hidden;
+  background: #000;
+}
+
 .cl-lastAuthenticationStrategyBadge {
   display: none !important;
 }

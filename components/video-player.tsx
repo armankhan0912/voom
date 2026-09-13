@@ -12,11 +12,21 @@ function progressFromVideo(video: HTMLVideoElement) {
   return Math.min(100, Math.max(0, (currentTime / duration) * 100));
 }
 
-export function VideoPlayer({ src, title }: { src: string; title: string }) {
+export function VideoPlayer({
+  src,
+  title,
+  variant = "watch",
+}: {
+  src: string;
+  title: string;
+  variant?: "watch" | "embed";
+}) {
   const { videoRef } = useWatchPlayer();
   const progressBarRef = useRef<HTMLDivElement>(null);
   const recoveringDuration = useRef(false);
   const [progress, setProgress] = useState(0);
+  const [loadError, setLoadError] = useState(false);
+  const embed = variant === "embed";
 
   const syncProgress = useCallback(() => {
     const video = videoRef.current;
@@ -35,6 +45,7 @@ export function VideoPlayer({ src, title }: { src: string; title: string }) {
 
     recoveringDuration.current = false;
     setProgress(0);
+    setLoadError(false);
 
     const finishDurationRecovery = () => {
       if (!recoveringDuration.current) {
@@ -90,6 +101,11 @@ export function VideoPlayer({ src, title }: { src: string; title: string }) {
       setProgress(100);
     };
 
+    const onError = () => {
+      recoveringDuration.current = false;
+      setLoadError(true);
+    };
+
     video.addEventListener("loadedmetadata", onLoadedMetadata);
     video.addEventListener("durationchange", onDurationChange);
     video.addEventListener("timeupdate", syncProgress);
@@ -98,6 +114,7 @@ export function VideoPlayer({ src, title }: { src: string; title: string }) {
     video.addEventListener("ended", onEnded);
     video.addEventListener("seeking", syncProgress);
     video.addEventListener("seeked", onSeeked);
+    video.addEventListener("error", onError);
 
     if (video.readyState >= 1) {
       onLoadedMetadata();
@@ -114,6 +131,7 @@ export function VideoPlayer({ src, title }: { src: string; title: string }) {
       video.removeEventListener("ended", onEnded);
       video.removeEventListener("seeking", syncProgress);
       video.removeEventListener("seeked", onSeeked);
+      video.removeEventListener("error", onError);
     };
   }, [src, syncProgress, videoRef]);
 
@@ -136,16 +154,31 @@ export function VideoPlayer({ src, title }: { src: string; title: string }) {
   };
 
   return (
-    <div className="relative overflow-hidden rounded-[20px] bg-black shadow-[0_8px_28px_rgba(43,33,24,0.12)]">
+    <div
+      className={
+        embed
+          ? "relative h-full w-full overflow-hidden bg-black"
+          : "relative overflow-hidden rounded-[20px] bg-black shadow-[0_8px_28px_rgba(43,33,24,0.12)]"
+      }
+    >
       <video
         ref={videoRef}
-        className="voom-watch-video aspect-video w-full"
+        className={
+          embed
+            ? "voom-watch-video h-full w-full object-contain"
+            : "voom-watch-video aspect-video w-full"
+        }
         src={src}
         controls
         playsInline
         preload="metadata"
         title={title}
       />
+      {loadError ? (
+        <div className="absolute inset-0 z-20 flex items-center justify-center bg-black/80 px-6 text-center text-sm text-white/85">
+          This video could not be loaded. Refresh to try again.
+        </div>
+      ) : null}
       <div
         ref={progressBarRef}
         className="absolute inset-x-3 bottom-[42px] z-10 h-1 cursor-pointer rounded-full bg-white/25"

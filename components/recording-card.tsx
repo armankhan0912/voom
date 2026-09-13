@@ -47,7 +47,7 @@ export function RecordingCard({
           </p>
         </div>
         <div className="flex shrink-0 items-center gap-1">
-          <ShareButton url={shareUrl(recording.id)} />
+          <ShareButton videoId={recording.id} url={shareUrl(recording.id)} />
           <DeleteRecordingButton id={recording.id} />
         </div>
       </div>

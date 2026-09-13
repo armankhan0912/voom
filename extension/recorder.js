@@ -18,8 +18,9 @@ let micStream = null;
 let displayStream = null;
 let recordStream = null;
 let recorder = null;
-let pendingPresign = null;
-const chunks = [];
+let uploadQueue = null;
+let pausedByUpload = false;
+let bytesOnR2 = false;
 let recordedMs = 0;
 let segmentStartedAt = 0;
 let tickId = 0;
@@ -290,10 +291,67 @@ function getDesktopStream(streamId) {
   return navigator.mediaDevices.getUserMedia({ audio: false, video });
 }
 
-function prefetchPresign() {
-  pendingPresign = chrome.runtime
-    .sendMessage({ type: "voom-presign", contentType: "video/webm" })
-    .catch(() => null);
+function handleUploadBackpressure(active) {
+  if (!recorder || state !== "recording") {
+    return;
+  }
+
+  if (active && recorder.state === "recording") {
+    recorder.pause();
+    recordedMs += Date.now() - segmentStartedAt;
+    window.clearInterval(tickId);
+    pausedByUpload = true;
+    return;
+  }
+
+  if (!active && pausedByUpload && recorder.state === "paused") {
+    recorder.resume();
+    segmentStartedAt = Date.now();
+    startTicker();
+    pausedByUpload = false;
+  }
+}
+
+function createUploadQueue() {
+  return createVoomUploadQueue({
+    requestStart() {
+      return chrome.runtime.sendMessage({
+        type: "voom-upload-start",
+        contentType: "video/webm",
+      });
+    },
+    requestBeginMultipart(videoId) {
+      return chrome.runtime.sendMessage({
+        type: "voom-upload-multipart",
+        videoId,
+      });
+    },
+    requestPartUrl(videoId, partNumber) {
+      return chrome.runtime.sendMessage({
+        type: "voom-upload-part",
+        videoId,
+        partNumber,
+      });
+    },
+    requestPutUrl(videoId) {
+      return chrome.runtime.sendMessage({
+        type: "voom-upload-object",
+        videoId,
+      });
+    },
+    onBackpressure: handleUploadBackpressure,
+  });
+}
+
+async function abortUploadSession() {
+  const videoId = uploadQueue?.getState().videoId;
+  if (!videoId) {
+    return;
+  }
+
+  await chrome.runtime
+    .sendMessage({ type: "voom-upload-abort", videoId })
+    .catch(() => {});
 }
 
 async function startRecording() {
@@ -344,9 +402,11 @@ async function startRecording() {
     return;
   }
 
-  chunks.length = 0;
   recordedMs = 0;
   segmentStartedAt = Date.now();
+  pausedByUpload = false;
+  bytesOnR2 = false;
+  uploadQueue = createUploadQueue();
 
   recorder = new MediaRecorder(recordStream, {
     mimeType: MediaRecorder.isTypeSupported("video/webm;codecs=vp8,opus")
@@ -356,7 +416,10 @@ async function startRecording() {
 
   recorder.ondataavailable = (event) => {
     if (event.data.size > 0) {
-      chunks.push(event.data);
+      if (state === "stopping") {
+        console.log("[voom] final dataavailable", event.data.size);
+      }
+      uploadQueue.enqueue(event.data);
     }
   };
 
@@ -367,7 +430,10 @@ async function startRecording() {
   };
 
   recorder.onstop = () => {
-    void finalizeUpload();
+    // Let the final dataavailable from stop()/requestData land before flush.
+    window.setTimeout(() => {
+      void finalizeUpload();
+    }, 100);
   };
 
   displayStream.getVideoTracks()[0]?.addEventListener("ended", () => {
@@ -376,39 +442,66 @@ async function startRecording() {
     }
   });
 
+  try {
+    await uploadQueue.begin();
+  } catch (error) {
+    console.error("[voom] upload session failed", error);
+    stopTracks(displayStream);
+    stopTracks(micStream);
+    stopTracks(recordStream);
+    displayStream = null;
+    micStream = null;
+    recordStream = null;
+    recorder = null;
+    uploadQueue = null;
+    setState("error");
+    setError(error instanceof Error ? error.message : "Could not start upload");
+    chrome.runtime.sendMessage({ type: "voom-capture-cancelled" }).catch(() => {});
+    return;
+  }
+
   recorder.start(1000);
   setState("recording");
   startTicker();
-  prefetchPresign();
   chrome.runtime.sendMessage({ type: "voom-focus-page" }).catch(() => {});
 }
 
 function pauseRecording() {
-  if (!recorder || recorder.state !== "recording") {
+  if (state !== "recording") {
     return;
   }
 
-  recorder.pause();
-  recordedMs += Date.now() - segmentStartedAt;
-  window.clearInterval(tickId);
+  if (recorder?.state === "recording") {
+    recorder.pause();
+    recordedMs += Date.now() - segmentStartedAt;
+    window.clearInterval(tickId);
+  }
+
+  pausedByUpload = false;
   setState("paused");
 }
 
 function resumeRecording() {
-  if (!recorder || recorder.state !== "paused") {
+  if (state !== "paused") {
     return;
   }
 
-  recorder.resume();
-  segmentStartedAt = Date.now();
+  if (recorder?.state === "paused") {
+    recorder.resume();
+    segmentStartedAt = Date.now();
+    startTicker();
+  }
+
+  pausedByUpload = false;
   setState("recording");
-  startTicker();
 }
 
 async function stopRecording() {
   if (state === "stopping" || state === "completed") {
     return;
   }
+
+  console.log("[voom] STOP received");
 
   if (recorder?.state === "recording") {
     recordedMs += Date.now() - segmentStartedAt;
@@ -423,6 +516,7 @@ async function stopRecording() {
     } catch {
       // Some engines do not implement requestData.
     }
+    console.log("[voom] MediaRecorder.stop()");
     recorder.stop();
     return;
   }
@@ -433,8 +527,6 @@ async function stopRecording() {
 async function finalizeUpload() {
   window.clearInterval(tickId);
 
-  const blob = new Blob(chunks, { type: "video/webm" });
-  chunks.length = 0;
   const duration = Math.max(1, Math.round(recordedMs / 1000));
   recordedMs = 0;
 
@@ -445,63 +537,48 @@ async function finalizeUpload() {
   micStream = null;
   recordStream = null;
   recorder = null;
-
-  if (blob.size === 0) {
-    chrome.runtime.sendMessage({ type: "voom-remove-overlay" }).catch(() => {});
-    setState("error");
-    setError("Nothing was recorded.");
-    return;
-  }
+  pausedByUpload = false;
 
   try {
-    const result = await uploadFromRecorder(blob, duration);
-    if (result?.error) {
-      throw new Error(result.error);
+    if (!uploadQueue) {
+      throw new Error("Nothing was recorded.");
     }
+
+    console.log("[voom] assembler flush + upload remaining data");
+    const result = await uploadQueue.finish();
+    bytesOnR2 = true;
+    console.log("[voom] finish/complete R2", result.mode, result.videoId);
+
+    const completed =
+      result.mode === "put"
+        ? await chrome.runtime.sendMessage({
+            type: "voom-complete",
+            videoId: result.videoId,
+            duration,
+          })
+        : await chrome.runtime.sendMessage({
+            type: "voom-upload-finish",
+            videoId: result.videoId,
+            parts: result.parts,
+            duration,
+          });
+
+    if (completed?.error) {
+      const error = new Error(completed.error);
+      error.finalized = completed.finalized === true || bytesOnR2;
+      throw error;
+    }
+
     setState("completed");
+    console.log("[voom] video ready", result.videoId);
   } catch (caught) {
+    if (!caught?.finalized) {
+      await abortUploadSession();
+    }
     chrome.runtime.sendMessage({ type: "voom-remove-overlay" }).catch(() => {});
     setState("error");
     setError(caught instanceof Error ? caught.message : "Upload failed.");
   }
-}
-
-async function uploadFromRecorder(blob, duration) {
-  const contentType = "video/webm";
-  let presign = await pendingPresign;
-  pendingPresign = null;
-
-  if (!presign || presign.error) {
-    presign = await chrome.runtime.sendMessage({
-      type: "voom-presign",
-      contentType,
-    });
-  }
-
-  if (!presign || presign.error) {
-    throw new Error(presign?.error || "Could not start upload");
-  }
-
-  const putResponse = await fetch(presign.uploadUrl, {
-    method: "PUT",
-    body: blob,
-    headers: { "Content-Type": presign.contentType },
-  });
-
-  if (!putResponse.ok) {
-    await chrome.runtime.sendMessage({
-      type: "voom-complete",
-      videoId: presign.video.id,
-      failed: true,
-    });
-    throw new Error("Upload to storage failed");
-  }
-
-  return chrome.runtime.sendMessage({
-    type: "voom-complete",
-    videoId: presign.video.id,
-    duration,
-  });
 }
 
 allowButton?.addEventListener("click", () => {
@@ -529,7 +606,7 @@ micEnabledInput?.addEventListener("change", () => {
   }
 });
 
-chrome.runtime.onMessage.addListener((message) => {
+function handleRecorderControl(message) {
   if (message?.type !== "voom-recorder-control") {
     return;
   }
@@ -554,14 +631,42 @@ chrome.runtime.onMessage.addListener((message) => {
   if (message.action === "stop") {
     void stopRecording();
   }
-});
+}
+
+chrome.runtime.onMessage.addListener(handleRecorderControl);
+
+function connectRecorderPort() {
+  let port;
+  try {
+    port = chrome.runtime.connect({ name: "voom-recorder" });
+  } catch {
+    return;
+  }
+
+  port.onMessage.addListener(handleRecorderControl);
+  port.onDisconnect.addListener(() => {
+    if (state === "completed" || state === "error") {
+      return;
+    }
+    window.setTimeout(connectRecorderPort, 250);
+  });
+}
+
+connectRecorderPort();
 
 window.addEventListener("beforeunload", () => {
   stopTracks(cameraStream);
   stopTracks(micStream);
   stopTracks(displayStream);
   stopTracks(recordStream);
-  chrome.runtime.sendMessage({ type: "voom-remove-overlay" }).catch(() => {});
+  const videoId = uploadQueue?.getState().videoId;
+  // Stopping means finish() is in flight — do not abort that upload.
+  if (videoId && state !== "completed" && state !== "stopping" && !bytesOnR2) {
+    chrome.runtime.sendMessage({ type: "voom-upload-abort", videoId }).catch(() => {});
+  }
+  if (state !== "stopping") {
+    chrome.runtime.sendMessage({ type: "voom-remove-overlay" }).catch(() => {});
+  }
 });
 
 async function boot() {

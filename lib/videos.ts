@@ -42,3 +42,14 @@ export function normalizeTitle(value: unknown) {
   const title = value.trim().slice(0, 120);
   return title.length > 0 ? title : null;
 }
+
+export function videoDownloadFilename(title: string) {
+  const safe = title
+    .replace(/["\\]/g, "")
+    .replace(/[^\w\s.-]/g, "")
+    .trim()
+    .replace(/\s+/g, "-")
+    .slice(0, 80);
+  const base = safe || "voom";
+  return base.toLowerCase().endsWith(".webm") ? base : `${base}.webm`;
+}

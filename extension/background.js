@@ -7,6 +7,9 @@ const OVERLAY_STATES = new Set([
   "stopping",
 ]);
 
+/** Long-lived ports from recorder.html. Keeps the SW alive and carries Stop. */
+const recorderPorts = new Set();
+
 function emptySession() {
   return {
     recorderTabId: null,
@@ -16,6 +19,8 @@ function emptySession() {
     pendingStreamId: null,
     state: "idle",
     elapsedMs: 0,
+    videoId: null,
+    uploadSettled: false,
   };
 }
 
@@ -327,6 +332,8 @@ async function beginRecording(message = {}) {
     pendingStreamId: null,
     state: "screen_selection",
     elapsedMs: 0,
+    videoId: null,
+    uploadSettled: false,
   });
 
   const host = await openRecorder(params.toString(), sourceTabId);
@@ -377,10 +384,52 @@ async function removeAllOverlays() {
 }
 
 function sendToRecorder(action) {
-  chrome.runtime
-    .sendMessage({ type: "voom-recorder-control", action })
-    .catch(() => {});
+  const message = { type: "voom-recorder-control", action };
+  let posted = false;
+
+  for (const port of recorderPorts) {
+    try {
+      port.postMessage(message);
+      posted = true;
+    } catch {
+      recorderPorts.delete(port);
+    }
+  }
+
+  if (posted) {
+    return;
+  }
+
+  chrome.runtime.sendMessage(message).catch((error) => {
+    console.warn(
+      "[voom] recorder control did not arrive",
+      action,
+      error?.message ?? error,
+    );
+  });
 }
+
+chrome.runtime.onConnect.addListener((port) => {
+  if (port.name !== "voom-recorder") {
+    return;
+  }
+
+  recorderPorts.add(port);
+  port.onDisconnect.addListener(() => {
+    recorderPorts.delete(port);
+  });
+
+  // Re-deliver Stop if the SW restarted after the overlay already asked to stop.
+  void getSession().then((session) => {
+    if (session.state === "stopping") {
+      try {
+        port.postMessage({ type: "voom-recorder-control", action: "stop" });
+      } catch {
+        recorderPorts.delete(port);
+      }
+    }
+  });
+});
 
 async function waitForTabComplete(tabId) {
   if (tabId == null) {
@@ -418,6 +467,74 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         error: caught instanceof Error ? caught.message : "Could not start",
       });
     });
+    return true;
+  }
+
+  if (message?.type === "voom-upload-start") {
+    void startUpload(message.contentType)
+      .then(sendResponse)
+      .catch((caught) => {
+        sendResponse({
+          error: caught instanceof Error ? caught.message : "Could not start upload",
+        });
+      });
+    return true;
+  }
+
+  if (message?.type === "voom-upload-multipart") {
+    void beginMultipart(message.videoId)
+      .then(sendResponse)
+      .catch((caught) => {
+        sendResponse({
+          error:
+            caught instanceof Error ? caught.message : "Could not start multipart upload",
+        });
+      });
+    return true;
+  }
+
+  if (message?.type === "voom-upload-object") {
+    void signObjectUpload(message.videoId)
+      .then(sendResponse)
+      .catch((caught) => {
+        sendResponse({
+          error: caught instanceof Error ? caught.message : "Could not start upload",
+        });
+      });
+    return true;
+  }
+
+  if (message?.type === "voom-upload-part") {
+    void signUploadPart(message.videoId, message.partNumber)
+      .then(sendResponse)
+      .catch((caught) => {
+        sendResponse({
+          error: caught instanceof Error ? caught.message : "Could not sign upload part",
+        });
+      });
+    return true;
+  }
+
+  if (message?.type === "voom-upload-finish") {
+    void finishUpload(message)
+      .then(sendResponse)
+      .catch((caught) => {
+        sendResponse({
+          error: caught instanceof Error ? caught.message : "Could not finalize video",
+          finalized: false,
+        });
+      });
+    return true;
+  }
+
+  if (message?.type === "voom-upload-abort") {
+    void abortUpload(message)
+      .then(sendResponse)
+      .catch((caught) => {
+        sendResponse({
+          error: caught instanceof Error ? caught.message : "Could not abort upload",
+        });
+      });
     return true;
   }
 
@@ -480,7 +597,21 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
 
   if (message?.type === "voom-overlay-control") {
-    sendToRecorder(message.action);
+    void (async () => {
+      if (message.action === "stop") {
+        const session = await setSession({ state: "stopping" });
+        if (session.overlayTabId != null) {
+          chrome.tabs
+            .sendMessage(session.overlayTabId, {
+              type: "voom-ui-state",
+              state: "stopping",
+              elapsedMs: session.elapsedMs,
+            })
+            .catch(() => {});
+        }
+      }
+      sendToRecorder(message.action);
+    })();
     return;
   }
 
@@ -580,6 +711,9 @@ chrome.tabs.onRemoved.addListener((tabId) => {
   void (async () => {
     const session = await getSession();
     if (tabId === session.recorderTabId) {
+      if (session.videoId && !session.uploadSettled) {
+        await abortUpload({ videoId: session.videoId }).catch(() => {});
+      }
       await removeAllOverlays();
       await clearSession();
       return;
@@ -589,6 +723,103 @@ chrome.tabs.onRemoved.addListener((tabId) => {
     }
   })();
 });
+
+async function voomApi(path, body) {
+  const response = await fetch(`${VOOM_APP_URL}${path}`, {
+    method: "POST",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body ?? {}),
+  });
+
+  if (response.status === 401) {
+    await chrome.tabs.create({ url: `${VOOM_APP_URL}/sign-in` });
+    throw new Error("Sign in to Voom in the browser first");
+  }
+
+  if (!response.ok) {
+    let message = "Request failed";
+    try {
+      const payload = await response.json();
+      if (typeof payload.error === "string" && payload.error) {
+        message = payload.error;
+      }
+    } catch {
+      // Keep the generic message.
+    }
+    throw new Error(message);
+  }
+
+  return response.json();
+}
+
+async function startUpload(contentType) {
+  const type = contentType?.startsWith("video/mp4") ? "video/mp4" : "video/webm";
+  const result = await voomApi("/api/uploads/start", { contentType: type });
+  await setSession({
+    videoId: result.video?.id ?? null,
+    uploadSettled: false,
+  });
+  return result;
+}
+
+async function beginMultipart(videoId) {
+  if (!videoId) {
+    throw new Error("Invalid upload");
+  }
+
+  return voomApi(`/api/uploads/${videoId}/multipart`);
+}
+
+async function signObjectUpload(videoId) {
+  if (!videoId) {
+    throw new Error("Invalid upload");
+  }
+
+  return voomApi(`/api/uploads/${videoId}/object`);
+}
+
+async function signUploadPart(videoId, partNumber) {
+  if (!videoId || !Number.isInteger(partNumber)) {
+    throw new Error("Invalid upload part");
+  }
+
+  return voomApi(`/api/uploads/${videoId}/part`, { partNumber });
+}
+
+async function finishUpload(message) {
+  const videoId = message.videoId;
+  if (!videoId || !Array.isArray(message.parts)) {
+    throw new Error("Invalid upload finish request");
+  }
+
+  await voomApi(`/api/uploads/${videoId}/finish`, { parts: message.parts });
+  await setSession({ videoId, uploadSettled: true });
+
+  try {
+    return await completeUpload({
+      videoId,
+      duration: message.duration ?? 0,
+    });
+  } catch (caught) {
+    return {
+      error: caught instanceof Error ? caught.message : "Could not finalize video",
+      finalized: true,
+    };
+  }
+}
+
+async function abortUpload(message) {
+  const session = await getSession();
+  const videoId = message.videoId ?? session.videoId;
+
+  if (!videoId || session.uploadSettled) {
+    return { ok: true };
+  }
+
+  await setSession({ uploadSettled: true });
+  return voomApi(`/api/uploads/${videoId}/abort`);
+}
 
 async function presignUpload(contentType) {
   const type = contentType?.startsWith("video/mp4") ? "video/mp4" : "video/webm";
@@ -611,9 +842,34 @@ async function presignUpload(contentType) {
   return presignResponse.json();
 }
 
+async function showReadyVideo(videoId) {
+  const watchUrl = `${VOOM_APP_URL}/voom/${videoId}`;
+  const session = await getSession();
+  const targetId = session.sourceTabId ?? session.overlayTabId;
+
+  if (targetId != null && (await tabExists(targetId))) {
+    await chrome.tabs.update(targetId, { url: watchUrl, active: true }).catch(() => {});
+    return;
+  }
+
+  await chrome.tabs.create({ url: watchUrl, active: true });
+}
+
+function cleanupAfterComplete() {
+  setTimeout(() => {
+    void (async () => {
+      await removeAllOverlays();
+      await closeRecorder();
+      await clearSession();
+    })();
+  }, 0);
+}
+
 async function completeUpload(message) {
   const videoId = message.videoId;
   const failed = message.failed === true;
+
+  console.log("[voom] POST /api/videos/:id/complete", videoId, { failed });
 
   const completeResponse = await fetch(
     `${VOOM_APP_URL}/api/videos/${videoId}/complete`,
@@ -636,14 +892,16 @@ async function completeUpload(message) {
     throw new Error("Could not finalize video");
   }
 
+  const payload = await completeResponse.json();
+
   if (!failed) {
-    await chrome.tabs.create({ url: `${VOOM_APP_URL}/voom/${videoId}`, active: true });
-    await removeAllOverlays();
-    await closeRecorder();
-    await clearSession();
+    await setSession({ videoId, uploadSettled: true });
+    console.log("[voom] status = ready, navigate/show video", videoId);
+    await showReadyVideo(videoId);
+    cleanupAfterComplete();
   }
 
-  return completeResponse.json();
+  return payload;
 }
 
 async function uploadRecording(message) {
@@ -673,8 +931,6 @@ async function uploadRecording(message) {
   });
 }
 
-void closeLegacyRecorderTabs();
-
 async function reloadAppTabs() {
   const tabs = await chrome.tabs.query({
     url: ["http://localhost:3000/*", "http://127.0.0.1:3000/*"],
@@ -689,4 +945,8 @@ async function reloadAppTabs() {
 chrome.runtime.onInstalled.addListener(() => {
   void closeLegacyRecorderTabs();
   void reloadAppTabs();
+});
+
+chrome.runtime.onStartup.addListener(() => {
+  void closeLegacyRecorderTabs();
 });

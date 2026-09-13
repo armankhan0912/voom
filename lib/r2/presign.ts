@@ -36,6 +36,21 @@ export async function createPlaybackUrl(key: string) {
   );
 }
 
+export async function createDownloadUrl(key: string, filename: string) {
+  const { bucket } = getR2Config();
+
+  return getSignedUrl(
+    getR2Client(),
+    new GetObjectCommand({
+      Bucket: bucket,
+      Key: key,
+      ResponseContentDisposition: `attachment; filename="${filename}"`,
+      ResponseContentType: "video/webm",
+    }),
+    { expiresIn: PLAYBACK_URL_EXPIRES_IN },
+  );
+}
+
 export async function createTranscriptionUrl(key: string) {
   const { bucket } = getR2Config();
 

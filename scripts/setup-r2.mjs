@@ -52,7 +52,7 @@ async function main() {
             {
               AllowedOrigins: ["http://localhost:3000"],
               AllowedMethods: ["GET", "PUT", "HEAD"],
-              AllowedHeaders: ["content-type"],
+              AllowedHeaders: ["*"],
               ExposeHeaders: ["ETag"],
               MaxAgeSeconds: 3600,
             },

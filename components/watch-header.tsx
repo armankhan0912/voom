@@ -1,22 +1,16 @@
 import Link from "next/link";
+import { ProfileMenu } from "@/components/profile-menu";
 import { ShareButton } from "@/components/share-button";
 import { SignInButton } from "@/components/sign-in-button";
-import { SignOutButton } from "@/components/sign-out-button";
 import { VoomBrand } from "@/components/voom-logo";
-
-function initials(name: string | null, email: string) {
-  if (name?.trim()) {
-    const parts = name.trim().split(/\s+/);
-    return `${parts[0]?.[0] ?? ""}${parts[1]?.[0] ?? ""}`.toUpperCase();
-  }
-  return email.slice(0, 2).toUpperCase();
-}
 
 export function WatchHeader({
   user,
+  videoId,
   shareUrl,
 }: {
   user: { name: string | null; email: string } | null;
+  videoId?: string;
   shareUrl?: string;
 }) {
   return (
@@ -33,17 +27,11 @@ export function WatchHeader({
         ) : null}
       </div>
       <div className="flex items-center gap-2">
-        {shareUrl ? <ShareButton url={shareUrl} label="Share" variant="chip" /> : null}
+        {shareUrl && videoId ? (
+          <ShareButton videoId={videoId} url={shareUrl} label="Share" variant="chip" />
+        ) : null}
         {user ? (
-          <>
-            <div
-              className="flex h-9 w-9 items-center justify-center rounded-full bg-voom-soft text-xs font-medium text-voom-accent"
-              title={user.name || user.email}
-            >
-              {initials(user.name, user.email)}
-            </div>
-            <SignOutButton />
-          </>
+          <ProfileMenu name={user.name} email={user.email} />
         ) : (
           <SignInButton variant="ghost">Sign in</SignInButton>
         )}
