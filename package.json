@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "eslint",
     "test": "node --test extension/upload-assembler.test.cjs",
+    "db:migrate": "drizzle-kit migrate",
     "r2:setup": "node --env-file=.env --env-file=.env.local scripts/setup-r2.mjs"
   },
   "dependencies": {
@@ -18,7 +19,8 @@
     "drizzle-orm": "^0.45.2",
     "next": "16.3.4",
     "react": "19.2.8",
-    "react-dom": "19.2.8"
+    "react-dom": "19.2.8",
+    "server-only": "^0.0.1"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",

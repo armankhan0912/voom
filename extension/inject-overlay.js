@@ -2,14 +2,14 @@
   const existingBubble = document.getElementById("voom-overlay-bubble");
   const existingToolbar = document.getElementById("voom-overlay-toolbar");
   if (existingBubble && existingToolbar) {
-    existingToolbar.style.width = "196px";
-    existingToolbar.style.height = "44px";
+    existingToolbar.style.width = "144px";
+    existingToolbar.style.height = "32px";
     existingToolbar.style.border = "0";
     existingToolbar.style.borderRadius = "999px";
     existingToolbar.style.background = "transparent";
     existingToolbar.style.backgroundColor = "transparent";
     existingToolbar.style.colorScheme = "none";
-    existingToolbar.style.boxShadow = "0 4px 16px rgba(40, 30, 20, 0.06)";
+    existingToolbar.style.boxShadow = "0 8px 24px rgba(0, 0, 0, 0.35)";
     existingToolbar.style.overflow = "hidden";
     existingToolbar.style.display = "block";
     return;
@@ -26,8 +26,8 @@
     "position:fixed",
     "left:50%",
     "bottom:24px",
-    "width:196px",
-    "height:44px",
+    "width:144px",
+    "height:32px",
     "border:0",
     "border-radius:999px",
     "z-index:2147483647",
@@ -35,7 +35,7 @@
     "background:transparent",
     "background-color:transparent",
     "color-scheme:none",
-    "box-shadow:0 4px 16px rgba(40, 30, 20, 0.06)",
+    "box-shadow:0 8px 24px rgba(0, 0, 0, 0.35)",
     "overflow:hidden",
     "transform:translateX(-50%)",
     "display:block",

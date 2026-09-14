@@ -125,7 +125,7 @@ export function LandingPage() {
 
           <p className="mx-auto mt-6 max-w-[540px] text-[17px] leading-[1.7] text-voom-muted">
             Voom turns every recording into a link with an AI summary,
-            transcript, and chapters — so no one has to watch it twice.
+            transcript, and chapters - so no one has to watch it twice.
           </p>
 
           <div className="mt-9 flex items-center justify-center gap-3 [&_.voom-btn-primary]:h-12 [&_.voom-btn-primary]:px-6 [&_.voom-btn-secondary]:h-12 [&_.voom-btn-secondary]:px-6">

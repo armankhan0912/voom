@@ -55,11 +55,11 @@ body {
   align-items: center;
   gap: 8px;
   box-sizing: border-box;
-  padding: 6px 10px;
-  border: 1px solid rgba(40, 30, 20, 0.08);
+  padding: 3px 8px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 999px;
-  background: rgba(255, 253, 249, 0.96);
-  color: #2b2118;
+  background: rgba(23, 23, 23, 0.96);
+  color: #fff;
   pointer-events: auto;
   cursor: grab;
   touch-action: none;
@@ -97,7 +97,7 @@ body {
 }
 
 #timer {
-  min-width: 0;
+  min-width: 2.5em;
   font-size: 13px;
   font-weight: 500;
   font-variant-numeric: tabular-nums;
@@ -107,15 +107,15 @@ body {
 
 .divider {
   width: 1px;
-  height: 18px;
+  height: 14px;
   flex-shrink: 0;
-  background: rgba(40, 30, 20, 0.08);
+  background: rgba(255, 255, 255, 0.16);
 }
 
 #toolbar button {
   display: inline-flex;
-  width: 28px;
-  height: 28px;
+  width: 24px;
+  height: 24px;
   flex-shrink: 0;
   align-items: center;
   justify-content: center;
@@ -151,11 +151,11 @@ body {
 }
 
 #stop {
-  color: #2b2118;
+  color: #fff;
 }
 
 #toolbar button:hover:not(:disabled) {
-  background: rgba(255, 107, 0, 0.08);
+  background: rgba(255, 255, 255, 0.1);
 }
 
 #toolbar button:disabled {

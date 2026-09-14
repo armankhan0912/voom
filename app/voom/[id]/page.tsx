@@ -100,7 +100,11 @@ export default async function VoomPage({
         <div className="grid min-h-0 flex-1 grid-cols-1 gap-8 md:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)] lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
           <section className="flex min-w-0 flex-col">
             {playbackUrl ? (
-              <VideoPlayer src={playbackUrl} title={video.title} />
+              <VideoPlayer
+                src={playbackUrl}
+                title={video.title}
+                duration={video.duration}
+              />
             ) : (
               <div className="rounded-[16px] border border-voom-line bg-voom-surface p-8 text-voom-muted">
                 {video.status === "failed"

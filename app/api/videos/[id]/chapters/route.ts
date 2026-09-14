@@ -39,9 +39,11 @@ export async function GET(
   const record = chapterRows[0];
 
   if (!record) {
-    after(() => {
-      void startChapters(id);
-    });
+    if (isOwner) {
+      after(() => {
+        void startChapters(id);
+      });
+    }
 
     return Response.json({
       videoId: id,
@@ -51,7 +53,7 @@ export async function GET(
     });
   }
 
-  if (record.status === "failed") {
+  if (record.status === "failed" && isOwner) {
     after(() => {
       void startChapters(id);
     });

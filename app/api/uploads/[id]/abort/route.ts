@@ -5,7 +5,7 @@ import { getCurrentDbUser } from "@/lib/current-user";
 import { objectExists } from "@/lib/r2/client";
 import { abortMultipartUpload } from "@/lib/r2/multipart";
 import { loadOwnedVideo } from "@/lib/uploads";
-import { serializeVideo } from "@/lib/videos";
+import { serializeVideo } from "@/lib/serialize-video";
 
 export async function POST(
   _request: Request,

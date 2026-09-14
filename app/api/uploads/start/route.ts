@@ -5,7 +5,7 @@ import {
   CONTENT_TYPE_EXTENSIONS,
   isAllowedContentType,
 } from "@/lib/uploads";
-import { serializeVideo } from "@/lib/videos";
+import { serializeVideo } from "@/lib/serialize-video";
 
 export async function POST(request: Request) {
   const user = await getCurrentDbUser();

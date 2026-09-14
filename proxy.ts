@@ -24,7 +24,8 @@ function isPublicRoute(request: Request, pathname: string) {
   return (
     request.method === "GET" &&
     (/^\/api\/videos\/[^/]+\/transcript$/.test(pathname) ||
-      /^\/api\/videos\/[^/]+\/summary$/.test(pathname))
+      /^\/api\/videos\/[^/]+\/summary$/.test(pathname) ||
+      /^\/api\/videos\/[^/]+\/chapters$/.test(pathname))
   );
 }
 

@@ -33,6 +33,7 @@ export default async function EmbedPage({
       id: videos.id,
       title: videos.title,
       status: videos.status,
+      duration: videos.duration,
       s3Key: videos.s3Key,
     })
     .from(videos)
@@ -63,7 +64,12 @@ export default async function EmbedPage({
   return (
     <WatchPlayerProvider>
       <div className="h-full w-full">
-        <VideoPlayer src={playbackUrl} title={video.title} variant="embed" />
+        <VideoPlayer
+          src={playbackUrl}
+          title={video.title}
+          duration={video.duration}
+          variant="embed"
+        />
       </div>
     </WatchPlayerProvider>
   );

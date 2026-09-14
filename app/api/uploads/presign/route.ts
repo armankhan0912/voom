@@ -2,7 +2,7 @@ import { db } from "@/lib/db";
 import { videos } from "@/lib/db/schema";
 import { getCurrentDbUser } from "@/lib/current-user";
 import { createUploadUrl } from "@/lib/r2/presign";
-import { serializeVideo } from "@/lib/videos";
+import { serializeVideo } from "@/lib/serialize-video";
 
 const CONTENT_TYPE_EXTENSIONS = {
   "video/webm": "webm",

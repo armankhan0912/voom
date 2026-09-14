@@ -4,11 +4,8 @@ import { videos } from "@/lib/db/schema";
 import { getCurrentDbUser } from "@/lib/current-user";
 import { deleteObject } from "@/lib/r2/client";
 import { createPlaybackUrl } from "@/lib/r2/presign";
-import {
-  normalizeTitle,
-  serializeVideo,
-  VIDEO_ID_PATTERN,
-} from "@/lib/videos";
+import { serializeVideo } from "@/lib/serialize-video";
+import { normalizeTitle, VIDEO_ID_PATTERN } from "@/lib/videos";
 
 async function loadVideo(id: string) {
   if (!VIDEO_ID_PATTERN.test(id)) {

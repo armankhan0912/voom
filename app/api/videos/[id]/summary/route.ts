@@ -48,7 +48,7 @@ export async function GET(
     });
   }
 
-  if (summary.status === "failed") {
+  if (summary.status === "failed" && isOwner) {
     after(() => {
       void startSummary(id);
     });

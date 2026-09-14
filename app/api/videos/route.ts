@@ -2,7 +2,7 @@ import { desc, eq } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { videos } from "@/lib/db/schema";
 import { getCurrentDbUser } from "@/lib/current-user";
-import { serializeVideo } from "@/lib/videos";
+import { serializeVideo } from "@/lib/serialize-video";
 
 export async function GET() {
   const user = await getCurrentDbUser();
