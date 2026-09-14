@@ -50,7 +50,10 @@ async function main() {
         CORSConfiguration: {
           CORSRules: [
             {
-              AllowedOrigins: ["http://localhost:3000"],
+              AllowedOrigins: [
+                "http://localhost:3000",
+                "https://voom-video.vercel.app",
+              ],
               AllowedMethods: ["GET", "PUT", "HEAD"],
               AllowedHeaders: ["*"],
               ExposeHeaders: ["ETag"],
@@ -60,7 +63,9 @@ async function main() {
         },
       }),
     );
-    console.log("CORS set for http://localhost:3000");
+    console.log(
+      "CORS set for http://localhost:3000 and https://voom-video.vercel.app",
+    );
   } catch (error) {
     console.log(
       `CORS not set automatically: ${error instanceof Error ? error.name : "Error"}`,

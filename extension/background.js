@@ -933,7 +933,7 @@ async function uploadRecording(message) {
 
 async function reloadAppTabs() {
   const tabs = await chrome.tabs.query({
-    url: ["http://localhost:3000/*", "http://127.0.0.1:3000/*"],
+    url: ["https://voom-video.vercel.app/*"],
   });
   await Promise.all(
     tabs

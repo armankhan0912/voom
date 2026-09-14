@@ -19,15 +19,13 @@
   ],
   "externally_connectable": {
     "matches": [
-      "http://localhost:3000/*",
-      "http://127.0.0.1:3000/*"
+      "https://voom-video.vercel.app/*"
     ]
   },
   "content_scripts": [
     {
       "matches": [
-        "http://localhost:3000/*",
-        "http://127.0.0.1:3000/*"
+        "https://voom-video.vercel.app/*"
       ],
       "js": ["bridge.js"],
       "run_at": "document_start"
