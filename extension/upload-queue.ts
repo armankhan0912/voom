@@ -1,51 +1,110 @@
-const voomAssembler =
-  typeof createPartAssembler === "function"
-    ? {
-        createPartAssembler,
-        UPLOAD_PART_SIZE,
-        MAX_CONCURRENT_UPLOADS,
-        MAX_QUEUED_BYTES,
-      }
-    : // eslint-disable-next-line @typescript-eslint/no-require-imports -- Node tests
-      require("./upload-assembler.js");
+import type { UploadPartRef } from "./messages";
+import {
+  MAX_CONCURRENT_UPLOADS,
+  MAX_QUEUED_BYTES,
+  UPLOAD_PART_SIZE,
+  createPartAssembler,
+} from "./upload-assembler";
+
+export type UploadStartResult = {
+  video?: { id: string };
+  uploadId?: string;
+  error?: string;
+};
+
+export type MultipartStartResult = {
+  uploadId?: string;
+  error?: string;
+};
+
+export type SignedUploadUrl = {
+  uploadUrl?: string;
+  contentType?: string;
+  error?: string;
+};
+
+export type UploadQueueOptions = {
+  requestStart: () => Promise<UploadStartResult>;
+  requestBeginMultipart?: (videoId: string) => Promise<MultipartStartResult>;
+  requestPartUrl: (
+    videoId: string,
+    partNumber: number,
+  ) => Promise<SignedUploadUrl>;
+  requestPutUrl?: (videoId: string) => Promise<SignedUploadUrl>;
+  onBackpressure?: (active: boolean) => void;
+  partSize?: number;
+  maxConcurrent?: number;
+  maxQueuedBytes?: number;
+};
+
+export type UploadFinishResult = {
+  mode: "put" | "multipart";
+  videoId: string;
+  parts: UploadPartRef[];
+};
+
+export type UploadQueueState = {
+  videoId: string | null;
+  uploadedBytes: number;
+  queuedBytes: number;
+  parts: number;
+  mode: "multipart" | "buffer";
+  failed: boolean;
+};
+
+export type VoomUploadQueue = {
+  begin: () => Promise<UploadStartResult>;
+  enqueue: (blob: Blob) => void;
+  finish: () => Promise<UploadFinishResult>;
+  getState: () => UploadQueueState;
+};
+
+type UploadJob = {
+  partNumber: number;
+  body: Blob;
+  size: number;
+};
+
+type UploadedPart = UploadPartRef & {
+  size: number;
+};
 
 // Crash/tab-close: do not resume an in-progress recording. The background
 // worker aborts multipart (if started) and marks the video failed.
-function createVoomUploadQueue(options) {
+export function createVoomUploadQueue(options: UploadQueueOptions): VoomUploadQueue {
   const requestStart = options.requestStart;
   const requestBeginMultipart = options.requestBeginMultipart;
   const requestPartUrl = options.requestPartUrl;
   const requestPutUrl = options.requestPutUrl;
   const onBackpressure = options.onBackpressure ?? (() => {});
-  const partSize = options.partSize ?? voomAssembler.UPLOAD_PART_SIZE;
-  const maxConcurrent =
-    options.maxConcurrent ?? voomAssembler.MAX_CONCURRENT_UPLOADS;
-  const maxQueuedBytes = options.maxQueuedBytes ?? voomAssembler.MAX_QUEUED_BYTES;
+  const partSize = options.partSize ?? UPLOAD_PART_SIZE;
+  const maxConcurrent = options.maxConcurrent ?? MAX_CONCURRENT_UPLOADS;
+  const maxQueuedBytes = options.maxQueuedBytes ?? MAX_QUEUED_BYTES;
   const resumeBytes = Math.floor(maxQueuedBytes / 2);
 
-  const assembler = voomAssembler.createPartAssembler(partSize);
-  const ready = [];
-  let session = null;
-  let sessionPromise = null;
-  let beginMultipartPromise = null;
+  const assembler = createPartAssembler(partSize);
+  const ready: UploadJob[] = [];
+  let session: UploadStartResult | null = null;
+  let sessionPromise: Promise<UploadStartResult> | null = null;
+  let beginMultipartPromise: Promise<MultipartStartResult> | null = null;
   let usedMultipart = false;
-  let incoming = [];
+  let incoming: Blob[] = [];
   let queuedBytes = 0;
   let nextPartNumber = 1;
   let inFlight = 0;
-  let parts = [];
+  let parts: UploadedPart[] = [];
   let uploadedBytes = 0;
   let pumping = false;
   let closed = false;
   let failed = false;
-  let failError = null;
-  let finishedResult = null;
+  let failError: Error | null = null;
+  let finishedResult: UploadFinishResult | null = null;
   let backpressure = false;
   let backpressureSince = 0;
   let chunkIndex = 0;
-  const waiters = [];
+  const waiters: Array<() => void> = [];
 
-  function log(event, extra) {
+  function log(event: string, extra?: unknown) {
     if (extra !== undefined) {
       console.log("[voom]", event, extra);
     } else {
@@ -53,7 +112,7 @@ function createVoomUploadQueue(options) {
     }
   }
 
-  function delay(ms) {
+  function delay(ms: number) {
     return new Promise((resolve) => {
       setTimeout(resolve, ms);
     });
@@ -66,7 +125,7 @@ function createVoomUploadQueue(options) {
     }
   }
 
-  function fail(error) {
+  function fail(error: unknown) {
     if (failed) {
       return;
     }
@@ -75,6 +134,14 @@ function createVoomUploadQueue(options) {
     failError = error instanceof Error ? error : new Error(String(error));
     log("chunk upload failed", failError.message);
     wake();
+  }
+
+  function requireSession() {
+    const videoId = session?.video?.id;
+    if (!session || !videoId) {
+      throw new Error(session?.error || "Upload session was not created");
+    }
+    return { session, videoId };
   }
 
   function updateBackpressure() {
@@ -101,7 +168,7 @@ function createVoomUploadQueue(options) {
     }
   }
 
-  function assignPart(body) {
+  function assignPart(body: Blob): UploadJob {
     const partNumber = nextPartNumber;
     nextPartNumber += 1;
     return {
@@ -114,6 +181,9 @@ function createVoomUploadQueue(options) {
   function fillReadyParts() {
     while (incoming.length > 0) {
       const blob = incoming.shift();
+      if (!blob) {
+        break;
+      }
       const complete = assembler.push(blob);
       for (const body of complete) {
         usedMultipart = true;
@@ -124,7 +194,7 @@ function createVoomUploadQueue(options) {
 
   function takeReadyPart() {
     fillReadyParts();
-    return ready.length > 0 ? ready.shift() : null;
+    return ready.shift() ?? null;
   }
 
   async function begin() {
@@ -149,22 +219,22 @@ function createVoomUploadQueue(options) {
       throw new Error("Multipart upload is not configured");
     }
 
-    beginMultipartPromise = requestBeginMultipart(session.video.id).then(
-      (result) => {
-        if (!result?.uploadId) {
-          throw new Error(result?.error || "Could not start multipart upload");
-        }
+    const { session: liveSession, videoId } = requireSession();
 
-        session.uploadId = result.uploadId;
-        log("multipart started", session.video.id);
-        return result;
-      },
-    );
+    beginMultipartPromise = requestBeginMultipart(videoId).then((result) => {
+      if (!result?.uploadId) {
+        throw new Error(result?.error || "Could not start multipart upload");
+      }
+
+      liveSession.uploadId = result.uploadId;
+      log("multipart started", videoId);
+      return result;
+    });
 
     return beginMultipartPromise;
   }
 
-  function enqueue(blob) {
+  function enqueue(blob: Blob) {
     if (failed || closed || !blob || blob.size <= 0) {
       return;
     }
@@ -178,10 +248,10 @@ function createVoomUploadQueue(options) {
     void pump();
   }
 
-  async function putWithRetries(url, body, contentType) {
+  async function putWithRetries(url: string, body: Blob, contentType?: string) {
     for (let attempt = 1; attempt <= 3; attempt += 1) {
       if (failed) {
-        throw failError;
+        throw failError ?? new Error("Upload failed");
       }
 
       try {
@@ -209,7 +279,7 @@ function createVoomUploadQueue(options) {
     throw new Error("Upload failed");
   }
 
-  async function uploadPart(job) {
+  async function uploadPart(job: UploadJob) {
     inFlight += 1;
     console.log(`[voom] part ${job.partNumber} size=${job.size} bytes`);
     log("chunk upload started", {
@@ -219,7 +289,8 @@ function createVoomUploadQueue(options) {
 
     try {
       await ensureMultipart();
-      const signed = await requestPartUrl(session.video.id, job.partNumber);
+      const { videoId } = requireSession();
+      const signed = await requestPartUrl(videoId, job.partNumber);
       if (!signed?.uploadUrl) {
         throw new Error(signed?.error || "Could not sign upload part");
       }
@@ -251,13 +322,14 @@ function createVoomUploadQueue(options) {
     }
   }
 
-  async function uploadSingleObject(blob) {
+  async function uploadSingleObject(blob: Blob) {
     if (!requestPutUrl) {
       throw new Error("Single-object upload is not configured");
     }
 
+    const { videoId } = requireSession();
     log("small recording putObject", { size: blob.size });
-    const signed = await requestPutUrl(session.video.id);
+    const signed = await requestPutUrl(videoId);
     if (!signed?.uploadUrl) {
       throw new Error(signed?.error || "Could not start upload");
     }
@@ -300,11 +372,11 @@ function createVoomUploadQueue(options) {
     }
   }
 
-  function waitUntil(predicate) {
-    return new Promise((resolve, reject) => {
+  function waitUntil(predicate: () => boolean) {
+    return new Promise<void>((resolve, reject) => {
       const check = () => {
         if (failed) {
-          reject(failError);
+          reject(failError ?? new Error("Upload failed"));
           return;
         }
 
@@ -342,12 +414,10 @@ function createVoomUploadQueue(options) {
     }
 
     if (failed) {
-      throw failError;
+      throw failError ?? new Error("Upload failed");
     }
 
-    if (!session) {
-      throw new Error("Upload session was not created");
-    }
+    const { videoId } = requireSession();
 
     fillReadyParts();
     const leftover = assembler.flush();
@@ -360,7 +430,7 @@ function createVoomUploadQueue(options) {
       await uploadSingleObject(leftover);
       finishedResult = {
         mode: "put",
-        videoId: session.video.id,
+        videoId,
         parts: [],
       };
       log("upload queue drained", { mode: "put", uploadedBytes });
@@ -403,13 +473,13 @@ function createVoomUploadQueue(options) {
 
     finishedResult = {
       mode: "multipart",
-      videoId: session.video.id,
+      videoId,
       parts: ordered.map(({ partNumber, etag }) => ({ partNumber, etag })),
     };
     return finishedResult;
   }
 
-  function getState() {
+  function getState(): UploadQueueState {
     return {
       videoId: session?.video?.id ?? null,
       uploadedBytes,
@@ -426,8 +496,4 @@ function createVoomUploadQueue(options) {
     finish,
     getState,
   };
-}
-
-if (typeof module !== "undefined" && module.exports) {
-  module.exports = { createVoomUploadQueue };
 }

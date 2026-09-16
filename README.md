@@ -5,16 +5,26 @@ This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-
 First, run the development server:
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
 pnpm dev
-# or
-bun dev
 ```
 
 Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+
+## Chrome extension
+
+The unpacked extension is the Vite build output, not the `extension/` source folder.
+
+```bash
+pnpm extension:build
+```
+
+Then in `chrome://extensions` enable Developer mode → Load unpacked → select `extension/dist`.
+
+```bash
+pnpm extension:dev
+```
+
+keeps that folder updated while you edit. Reload the extension in Chrome after a rebuild.
 
 You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
 

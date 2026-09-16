@@ -1,8 +1,37 @@
+const PRODUCTION_APP_URL = "https://voom-video.vercel.app";
+
+function isLocalHostname(hostname: string) {
+  return hostname === "localhost" || hostname === "127.0.0.1";
+}
+
+function withoutTrailingSlash(value: string) {
+  return value.replace(/\/$/, "");
+}
+
 export function getAppUrl() {
-  return (process.env.NEXT_PUBLIC_APP_URL ?? "https://voom-video.vercel.app").replace(
-    /\/$/,
-    "",
-  );
+  if (typeof window !== "undefined") {
+    try {
+      const { origin, hostname } = window.location;
+      if (!isLocalHostname(hostname)) {
+        return withoutTrailingSlash(origin);
+      }
+    } catch {
+      // Use the production origin below.
+    }
+  }
+
+  const configured = process.env.NEXT_PUBLIC_APP_URL?.trim() ?? "";
+  if (configured) {
+    try {
+      if (!isLocalHostname(new URL(configured).hostname)) {
+        return withoutTrailingSlash(configured);
+      }
+    } catch {
+      // Use the production origin below.
+    }
+  }
+
+  return PRODUCTION_APP_URL;
 }
 
 export function watchPath(videoId: string) {

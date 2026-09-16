@@ -8,32 +8,24 @@
     "default_popup": "popup.html"
   },
   "background": {
-    "service_worker": "background.js"
+    "service_worker": "background.ts",
+    "type": "module"
   },
-  "permissions": ["tabs", "scripting", "activeTab", "storage", "desktopCapture", "offscreen"],
-  "host_permissions": [
-    "http://localhost:3000/*",
-    "http://127.0.0.1:3000/*",
-    "http://*/*",
-    "https://*/*"
-  ],
+  "permissions": ["tabs", "scripting", "storage", "desktopCapture"],
+  "host_permissions": ["http://*/*", "https://*/*"],
   "externally_connectable": {
-    "matches": [
-      "https://voom-video.vercel.app/*"
-    ]
+    "matches": ["https://voom-video.vercel.app/*"]
   },
   "content_scripts": [
     {
-      "matches": [
-        "https://voom-video.vercel.app/*"
-      ],
-      "js": ["bridge.js"],
+      "matches": ["https://voom-video.vercel.app/*"],
+      "js": ["bridge.ts"],
       "run_at": "document_start"
     }
   ],
   "web_accessible_resources": [
     {
-      "resources": ["overlay.html", "overlay.js", "overlay.css"],
+      "resources": ["overlay.html", "recorder.html", "assets/*"],
       "matches": ["http://*/*", "https://*/*"]
     }
   ]

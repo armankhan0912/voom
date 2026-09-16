@@ -1,24 +1,27 @@
-/* eslint-disable @typescript-eslint/no-require-imports */
-const { describe, it, beforeEach, afterEach, mock } = require("node:test");
-const assert = require("node:assert/strict");
-const {
-  UPLOAD_PART_SIZE,
-  createPartAssembler,
-} = require("./upload-assembler.js");
-const { createVoomUploadQueue } = require("./upload-queue.js");
+import { afterEach, beforeEach, describe, it, mock } from "node:test";
+import assert from "node:assert/strict";
+import { UPLOAD_PART_SIZE, createPartAssembler } from "./upload-assembler";
+import { createVoomUploadQueue } from "./upload-queue";
 
 const PART_SIZE = UPLOAD_PART_SIZE;
 
-function filledBlob(size, value) {
+type UploadedRecord = {
+  size: number;
+  bytes: Uint8Array;
+  url: string;
+  partNumber?: number;
+};
+
+function filledBlob(size: number, value: number) {
   return new Blob([new Uint8Array(size).fill(value)]);
 }
 
-async function readBytes(blob) {
+async function readBytes(blob: Blob) {
   return new Uint8Array(await blob.arrayBuffer());
 }
 
-async function concatBytes(blobs) {
-  const pieces = [];
+async function concatBytes(blobs: Blob[]) {
+  const pieces: Uint8Array[] = [];
   let total = 0;
   for (const blob of blobs) {
     const bytes = await readBytes(blob);
@@ -47,12 +50,15 @@ describe("createPartAssembler", () => {
     const parts = assembler.push(c);
 
     assert.equal(parts.length, 1);
-    assert.equal(parts[0].size, PART_SIZE);
     assert.equal(assembler.getPendingBytes(), 2 * 1024 * 1024);
 
     const trailing = assembler.flush();
-    assert.equal(trailing.size, 2 * 1024 * 1024);
-    assert.deepEqual(await concatBytes([parts[0], trailing]), await concatBytes([a, b, c]));
+    const first = parts[0];
+    assert.equal(first?.size, PART_SIZE);
+    assert.equal(trailing?.size, 2 * 1024 * 1024);
+    assert.ok(first);
+    assert.ok(trailing);
+    assert.deepEqual(await concatBytes([first, trailing]), await concatBytes([a, b, c]));
   });
 
   it("splits one large blob that crosses 10 MiB", async () => {
@@ -62,15 +68,18 @@ describe("createPartAssembler", () => {
     const trailing = assembler.flush();
 
     assert.equal(parts.length, 1);
-    assert.equal(parts[0].size, PART_SIZE);
-    assert.equal(trailing.size, 1500);
-    assert.deepEqual(await concatBytes([parts[0], trailing]), await readBytes(source));
+    const first = parts[0];
+    assert.equal(first?.size, PART_SIZE);
+    assert.equal(trailing?.size, 1500);
+    assert.ok(first);
+    assert.ok(trailing);
+    assert.deepEqual(await concatBytes([first, trailing]), await readBytes(source));
   });
 
   it("assembles many small blobs without dropping or duplicating bytes", async () => {
     const assembler = createPartAssembler(PART_SIZE);
-    const blobs = [];
-    const complete = [];
+    const blobs: Blob[] = [];
+    const complete: Blob[] = [];
 
     for (let index = 0; index < 50; index += 1) {
       const blob = filledBlob(250_000 + (index % 5) * 1000, index + 1);
@@ -91,27 +100,27 @@ describe("createPartAssembler", () => {
 });
 
 describe("createVoomUploadQueue hybrid upload", () => {
-  const uploaded = [];
-  const objectPuts = [];
+  const uploaded: UploadedRecord[] = [];
+  const objectPuts: UploadedRecord[] = [];
   let failNext = 0;
   let multipartStarts = 0;
-  let originalFetch;
+  let originalFetch: typeof fetch;
 
   beforeEach(() => {
     uploaded.length = 0;
     objectPuts.length = 0;
     failNext = 0;
     multipartStarts = 0;
-    originalFetch = global.fetch;
-    global.fetch = async (url, init) => {
+    originalFetch = globalThis.fetch;
+    globalThis.fetch = (async (url: string | URL | Request, init?: RequestInit) => {
       if (failNext > 0) {
         failNext -= 1;
         throw new Error("network failure");
       }
 
-      const body = init.body;
+      const body = init?.body as Blob;
       const isObject = String(url).includes("/object");
-      const record = {
+      const record: UploadedRecord = {
         size: body.size,
         bytes: await readBytes(body),
         url: String(url),
@@ -126,18 +135,18 @@ describe("createVoomUploadQueue hybrid upload", () => {
       return {
         ok: true,
         headers: {
-          get(name) {
+          get(name: string) {
             return name.toLowerCase() === "etag"
               ? `"etag-${uploaded.length + objectPuts.length}"`
               : null;
           },
         },
-      };
-    };
+      } as Response;
+    }) as typeof fetch;
   });
 
   afterEach(() => {
-    global.fetch = originalFetch;
+    globalThis.fetch = originalFetch;
     mock.restoreAll();
   });
 
@@ -161,7 +170,7 @@ describe("createVoomUploadQueue hybrid upload", () => {
     });
   }
 
-  async function runQueue(blobs) {
+  async function runQueue(blobs: Blob[]) {
     const queue = createQueue();
     await queue.begin();
     for (const blob of blobs) {
@@ -178,8 +187,8 @@ describe("createVoomUploadQueue hybrid upload", () => {
     assert.equal(multipartStarts, 0);
     assert.equal(uploaded.length, 0);
     assert.equal(objectPuts.length, 1);
-    assert.equal(objectPuts[0].size, source.size);
-    assert.deepEqual(objectPuts[0].bytes, await readBytes(source));
+    assert.equal(objectPuts[0]?.size, source.size);
+    assert.deepEqual(objectPuts[0]?.bytes, await readBytes(source));
   });
 
   it("uploads a 7 MiB recording with a single PutObject", async () => {
@@ -188,7 +197,7 @@ describe("createVoomUploadQueue hybrid upload", () => {
 
     assert.equal(result.mode, "put");
     assert.equal(multipartStarts, 0);
-    assert.equal(objectPuts[0].size, 7 * 1024 * 1024);
+    assert.equal(objectPuts[0]?.size, 7 * 1024 * 1024);
   });
 
   it("uses multipart for an exact 10 MiB recording", async () => {
@@ -199,7 +208,7 @@ describe("createVoomUploadQueue hybrid upload", () => {
     assert.equal(multipartStarts, 1);
     assert.equal(objectPuts.length, 0);
     assert.equal(uploaded.length, 1);
-    assert.equal(uploaded[0].size, PART_SIZE);
+    assert.equal(uploaded[0]?.size, PART_SIZE);
     assert.deepEqual(
       result.parts.map((part) => part.partNumber),
       [1],
@@ -217,7 +226,9 @@ describe("createVoomUploadQueue hybrid upload", () => {
     );
     assert.deepEqual(
       await concatBytes(
-        [...uploaded].sort((left, right) => right.size - left.size).map((part) => new Blob([part.bytes])),
+        [...uploaded]
+          .sort((left, right) => right.size - left.size)
+          .map((part) => new Blob([part.bytes.buffer])),
       ),
       await readBytes(source),
     );
@@ -247,12 +258,12 @@ describe("createVoomUploadQueue hybrid upload", () => {
 
   it("keeps partNumbers stable when uploads finish out of order", async () => {
     const source = filledBlob(PART_SIZE * 2 + 50, 17);
-    let releaseFirst;
-    const firstReleased = new Promise((resolve) => {
+    let releaseFirst!: () => void;
+    const firstReleased = new Promise<void>((resolve) => {
       releaseFirst = resolve;
     });
 
-    global.fetch = async (url, init) => {
+    globalThis.fetch = (async (url: string | URL | Request, init?: RequestInit) => {
       const partNumber = Number(String(url).split("/").at(-1));
       if (partNumber === 1) {
         await firstReleased;
@@ -262,8 +273,9 @@ describe("createVoomUploadQueue hybrid upload", () => {
 
       uploaded.push({
         partNumber,
-        size: init.body.size,
-        bytes: await readBytes(init.body),
+        size: (init?.body as Blob).size,
+        bytes: await readBytes(init?.body as Blob),
+        url: String(url),
       });
 
       return {
@@ -273,15 +285,15 @@ describe("createVoomUploadQueue hybrid upload", () => {
             return `"etag-${partNumber}"`;
           },
         },
-      };
-    };
+      } as unknown as Response;
+    }) as typeof fetch;
 
     const result = await runQueue([source]);
     assert.deepEqual(
       result.parts.map((part) => part.partNumber),
       [1, 2, 3],
     );
-    assert.equal(result.parts[0].etag, '"etag-1"');
+    assert.equal(result.parts[0]?.etag, '"etag-1"');
   });
 
   it("retries a failed part without changing bytes", async () => {
@@ -291,7 +303,7 @@ describe("createVoomUploadQueue hybrid upload", () => {
 
     assert.equal(result.mode, "put");
     assert.equal(objectPuts.length, 1);
-    assert.deepEqual(objectPuts[0].bytes, await readBytes(source));
+    assert.deepEqual(objectPuts[0]?.bytes, await readBytes(source));
   });
 
   it("flushes leftover bytes on STOP while a part is in flight", async () => {
@@ -319,7 +331,7 @@ describe("createVoomUploadQueue hybrid upload", () => {
     const result = await queue.finish();
 
     assert.equal(result.mode, "put");
-    assert.equal(objectPuts[0].size, 3072);
+    assert.equal(objectPuts[0]?.size, 3072);
   });
 
   it("returns the same result for a duplicate finish call", async () => {
@@ -335,7 +347,7 @@ describe("createVoomUploadQueue hybrid upload", () => {
   });
 
   it("applies backpressure when queued bytes exceed the cap", async () => {
-    const events = [];
+    const events: boolean[] = [];
     const queue = createVoomUploadQueue({
       partSize: PART_SIZE,
       maxQueuedBytes: 1024,

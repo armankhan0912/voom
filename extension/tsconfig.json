@@ -1,0 +1,19 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "jsx": "react-jsx",
+    "strict": true,
+    "noEmit": true,
+    "allowJs": true,
+    "checkJs": false,
+    "skipLibCheck": true,
+    "isolatedModules": true,
+    "resolveJsonModule": true,
+    "types": ["chrome", "vite/client"]
+  },
+  "include": ["./**/*.ts", "./**/*.tsx", "./**/*.js", "./**/*.d.ts"],
+  "exclude": ["./**/*.test.ts"]
+}

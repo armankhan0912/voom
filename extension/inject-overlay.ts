@@ -1,3 +1,10 @@
+import type {
+  OverlayPart,
+  OverlayWindowMessage,
+  VoomRuntimeMessage,
+  VoomUiState,
+} from "./messages";
+
 (() => {
   const existingBubble = document.getElementById("voom-overlay-bubble");
   const existingToolbar = document.getElementById("voom-overlay-toolbar");
@@ -22,6 +29,18 @@
   const overlayUrl = chrome.runtime.getURL("overlay.html");
   const POS_KEY = "voom-overlay-pos";
 
+  type SavedPos = { left: number; top: number };
+  type SavedPositions = Partial<Record<OverlayPart, SavedPos>>;
+  type DragState = {
+    part: OverlayPart;
+    frame: HTMLIFrameElement;
+    shield: HTMLDivElement;
+    originLeft: number;
+    originTop: number;
+    screenX: number;
+    screenY: number;
+  };
+
   const toolbarFrameStyle = [
     "position:fixed",
     "left:50%",
@@ -43,7 +62,7 @@
     "opacity:0",
   ].join(";");
 
-  function mountFrame(id, part, style) {
+  function mountFrame(id: string, part: OverlayPart, style: string) {
     const iframe = document.createElement("iframe");
     iframe.id = id;
     iframe.className = "voom-overlay-frame";
@@ -87,21 +106,50 @@
     toolbarFrameStyle,
   );
 
-  const frames = {
+  const frames: Record<OverlayPart, HTMLIFrameElement> = {
     bubble: bubbleFrame,
     toolbar: toolbarFrame,
   };
 
-  let drag = null;
+  let drag: DragState | null = null;
 
-  function frameSize(frame) {
+  function isOverlayPart(part: unknown): part is OverlayPart {
+    return part === "bubble" || part === "toolbar";
+  }
+
+  function isOverlayWindowMessage(data: unknown): data is OverlayWindowMessage {
+    return (
+      typeof data === "object" &&
+      data !== null &&
+      "type" in data &&
+      typeof (data as { type: unknown }).type === "string"
+    );
+  }
+
+  function isVoomUiState(message: unknown): message is VoomUiState {
+    return (
+      typeof message === "object" &&
+      message !== null &&
+      "type" in message &&
+      (message as { type: unknown }).type === "voom-ui-state"
+    );
+  }
+
+  function messageType(message: unknown) {
+    if (typeof message !== "object" || message === null || !("type" in message)) {
+      return null;
+    }
+    return (message as { type: unknown }).type;
+  }
+
+  function frameSize(frame: HTMLIFrameElement) {
     const rect = frame.getBoundingClientRect();
     const width = rect.width || parseFloat(frame.style.width) || 0;
     const height = rect.height || parseFloat(frame.style.height) || 0;
     return { width, height };
   }
 
-  function clampPos(left, top, width, height) {
+  function clampPos(left: number, top: number, width: number, height: number) {
     const maxLeft = Math.max(0, window.innerWidth - width);
     const maxTop = Math.max(0, window.innerHeight - height);
     return {
@@ -110,7 +158,7 @@
     };
   }
 
-  function placeFrame(frame, left, top) {
+  function placeFrame(frame: HTMLIFrameElement, left: number, top: number) {
     const { width, height } = frameSize(frame);
     const pos = clampPos(left, top, width, height);
     frame.style.left = `${pos.left}px`;
@@ -121,7 +169,7 @@
     return pos;
   }
 
-  function applySavedPos(frame, pos) {
+  function applySavedPos(frame: HTMLIFrameElement, pos: SavedPos | undefined) {
     if (!pos || typeof pos.left !== "number" || typeof pos.top !== "number") {
       return;
     }
@@ -129,21 +177,21 @@
   }
 
   void chrome.storage.session.get(POS_KEY).then((stored) => {
-    const pos = stored[POS_KEY] ?? {};
+    const pos = (stored[POS_KEY] ?? {}) as SavedPositions;
     applySavedPos(bubbleFrame, pos.bubble);
     applySavedPos(toolbarFrame, pos.toolbar);
   });
 
-  function savePos(part, left, top) {
+  function savePos(part: OverlayPart, left: number, top: number) {
     void chrome.storage.session.get(POS_KEY).then((stored) => {
-      const current = stored[POS_KEY] ?? {};
+      const current = (stored[POS_KEY] ?? {}) as SavedPositions;
       void chrome.storage.session.set({
         [POS_KEY]: { ...current, [part]: { left, top } },
       });
     });
   }
 
-  function applyDrag(screenX, screenY) {
+  function applyDrag(screenX: number, screenY: number) {
     if (!drag) {
       return;
     }
@@ -158,11 +206,14 @@
     }
     const rect = drag.frame.getBoundingClientRect();
     savePos(drag.part, rect.left, rect.top);
-    drag.shield?.remove();
+    drag.shield.remove();
     drag = null;
   }
 
-  function startDrag(part, screenX, screenY) {
+  function startDrag(part: unknown, screenX: unknown, screenY: unknown) {
+    if (!isOverlayPart(part) || typeof screenX !== "number" || typeof screenY !== "number") {
+      return;
+    }
     const frame = frames[part];
     if (!frame || drag) {
       return;
@@ -194,9 +245,9 @@
     };
   }
 
-  window.addEventListener("message", (event) => {
+  window.addEventListener("message", (event: MessageEvent<unknown>) => {
     const data = event.data;
-    if (!data || typeof data.type !== "string") {
+    if (!isOverlayWindowMessage(data)) {
       return;
     }
 
@@ -216,7 +267,10 @@
         if (data.bubble) {
           requestAnimationFrame(() => {
             try {
-              bubbleFrame.contentWindow?.postMessage({ type: "voom-overlay-shown" }, "*");
+              bubbleFrame.contentWindow?.postMessage(
+                { type: "voom-overlay-shown" } satisfies OverlayWindowMessage,
+                "*",
+              );
             } catch {
               // Cross-origin or iframe already gone.
             }
@@ -259,96 +313,115 @@
   window.addEventListener("pointercancel", endDrag);
   window.addEventListener("blur", endDrag);
 
-  chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
-    if (!bubbleFrame.isConnected) {
-      return;
-    }
-
-    if (message?.type === "voom-ui-state") {
-      try {
-        bubbleFrame.contentWindow?.postMessage(message, "*");
-        toolbarFrame.contentWindow?.postMessage(message, "*");
-      } catch {
-        // Iframe not ready.
+  chrome.runtime.onMessage.addListener(
+    (message: unknown, _sender, sendResponse) => {
+      if (!bubbleFrame.isConnected) {
+        return;
       }
-      return;
-    }
 
-    const request =
-      message?.type === "voom-prime-media"
-        ? {
-            payload: { type: "voom-prime-media", mic: message.mic !== false },
-            resultType: "voom-prime-media-result",
-            timeoutMs: 60000,
-            showBubble: true,
-          }
-        : message?.type === "voom-choose-desktop"
+      if (isVoomUiState(message)) {
+        try {
+          bubbleFrame.contentWindow?.postMessage(message, "*");
+          toolbarFrame.contentWindow?.postMessage(message, "*");
+        } catch {
+          // Iframe not ready.
+        }
+        return;
+      }
+
+      const type = messageType(message);
+      const request =
+        type === "voom-prime-media"
           ? {
               payload: {
-                type: "voom-choose-desktop",
-                recorderTabId: message.recorderTabId,
+                type: "voom-prime-media" as const,
+                mic: (message as Extract<VoomRuntimeMessage, { type: "voom-prime-media" }>)
+                  .mic !== false,
               },
-              resultType: "voom-choose-desktop-result",
-              timeoutMs: 180000,
-              showBubble: false,
+              resultType: "voom-prime-media-result" as const,
+              timeoutMs: 60_000,
+              showBubble: true,
             }
-          : null;
+          : type === "voom-choose-desktop"
+            ? {
+                payload: {
+                  type: "voom-choose-desktop" as const,
+                  recorderTabId: (
+                    message as Extract<
+                      VoomRuntimeMessage,
+                      { type: "voom-choose-desktop" }
+                    >
+                  ).recorderTabId,
+                },
+                resultType: "voom-choose-desktop-result" as const,
+                timeoutMs: 180_000,
+                showBubble: false,
+              }
+            : null;
 
-    if (!request) {
-      return;
-    }
-
-    let settled = false;
-    const finish = (payload) => {
-      if (settled) {
+      if (!request) {
         return;
       }
-      settled = true;
-      window.removeEventListener("message", onResult);
-      if (request.showBubble && bubbleFrame.style.opacity === "0.01") {
-        bubbleFrame.style.visibility = "hidden";
-        bubbleFrame.style.opacity = "0";
-      }
-      sendResponse(payload);
-    };
 
-    function onResult(event) {
-      if (event.source !== bubbleFrame.contentWindow) {
-        return;
-      }
-      if (event.data?.type !== request.resultType) {
-        return;
-      }
-      finish(event.data);
-    }
-
-    window.addEventListener("message", onResult);
-
-    let sent = false;
-    const sendRequest = () => {
-      if (sent || settled) {
-        return;
-      }
-      sent = true;
-      try {
-        if (request.showBubble) {
-          bubbleFrame.style.visibility = "visible";
-          bubbleFrame.style.opacity = "0.01";
+      const activeRequest = request;
+      let settled = false;
+      const finish = (payload: unknown) => {
+        if (settled) {
+          return;
         }
-        bubbleFrame.contentWindow?.postMessage(request.payload, "*");
-      } catch {
-        finish({ ok: false, streamId: "", unsupported: true });
-      }
-    };
+        settled = true;
+        window.removeEventListener("message", onResult);
+        if (activeRequest.showBubble && bubbleFrame.style.opacity === "0.01") {
+          bubbleFrame.style.visibility = "hidden";
+          bubbleFrame.style.opacity = "0";
+        }
+        sendResponse(payload);
+      };
 
-    if (bubbleLoaded) {
-      sendRequest();
-    } else {
-      bubbleFrame.addEventListener("load", sendRequest, { once: true });
-    }
-    window.setTimeout(() => finish({ ok: false, streamId: "", unsupported: true }), request.timeoutMs);
-    return true;
-  });
+      function onResult(event: MessageEvent<unknown>) {
+        if (event.source !== bubbleFrame.contentWindow) {
+          return;
+        }
+        if (
+          !isOverlayWindowMessage(event.data) ||
+          event.data.type !== activeRequest.resultType
+        ) {
+          return;
+        }
+        finish(event.data);
+      }
+
+      window.addEventListener("message", onResult);
+
+      let sent = false;
+      const sendRequest = () => {
+        if (sent || settled) {
+          return;
+        }
+        sent = true;
+        try {
+          if (activeRequest.showBubble) {
+            bubbleFrame.style.visibility = "visible";
+            bubbleFrame.style.opacity = "0.01";
+          }
+          bubbleFrame.contentWindow?.postMessage(activeRequest.payload, "*");
+        } catch {
+          finish({ ok: false, streamId: "", unsupported: true });
+        }
+      };
+
+      if (bubbleLoaded) {
+        sendRequest();
+      } else {
+        bubbleFrame.addEventListener("load", sendRequest, { once: true });
+      }
+      window.setTimeout(
+        () => finish({ ok: false, streamId: "", unsupported: true }),
+        activeRequest.timeoutMs,
+      );
+      return true;
+    },
+  );
 
   window.addEventListener("resize", () => {
     for (const frame of Object.values(frames)) {

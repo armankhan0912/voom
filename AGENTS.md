@@ -87,4 +87,4 @@ Handle permissions, recording errors, upload failures, and interrupted recording
 After significant changes:
 
 ```bash
-npx tsc --noEmit
+pnpm exec tsc --noEmit

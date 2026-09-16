@@ -23,7 +23,11 @@ export function ShareButton({
   const [copied, setCopied] = useState<"link" | "embed" | null>(null);
   const [copyError, setCopyError] = useState<string | null>(null);
 
-  const share = url ?? shareUrl(videoId);
+  const generated = shareUrl(videoId);
+  const share =
+    url && !/https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?/i.test(url)
+      ? url
+      : generated;
   const embedCode = embedIframeCode(videoId);
 
   useEffect(() => {

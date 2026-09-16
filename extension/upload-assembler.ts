@@ -1,29 +1,43 @@
-const UPLOAD_PART_SIZE = 10 * 1024 * 1024;
-const MIN_MULTIPART_PART_SIZE = 5 * 1024 * 1024;
-const MAX_CONCURRENT_UPLOADS = 2;
-const MAX_QUEUED_BYTES = 32 * 1024 * 1024;
-const VOOM_MULTIPART_PART_SIZE = UPLOAD_PART_SIZE;
+export const UPLOAD_PART_SIZE = 10 * 1024 * 1024;
+export const MIN_MULTIPART_PART_SIZE = 5 * 1024 * 1024;
+export const MAX_CONCURRENT_UPLOADS = 2;
+export const MAX_QUEUED_BYTES = 32 * 1024 * 1024;
+export const VOOM_MULTIPART_PART_SIZE = UPLOAD_PART_SIZE;
 
-function createPartAssembler(partSize) {
+type Piece = {
+  blob: Blob;
+  offset: number;
+};
+
+export type PartAssembler = {
+  push: (blob: Blob | null | undefined) => Blob[];
+  flush: () => Blob | null;
+  getPendingBytes: () => number;
+  partSize: number;
+};
+
+export function createPartAssembler(partSize?: number): PartAssembler {
   const size = partSize ?? UPLOAD_PART_SIZE;
-  /** @type {{ blob: Blob, offset: number }[]} */
-  let pieces = [];
+  let pieces: Piece[] = [];
   let pendingBytes = 0;
 
-  function available(piece) {
+  function available(piece: Piece) {
     return piece.blob.size - piece.offset;
   }
 
-  function cut(byteCount) {
+  function cut(byteCount: number) {
     if (byteCount <= 0 || byteCount > pendingBytes) {
       throw new Error("Invalid assembler cut");
     }
 
-    const slices = [];
+    const slices: Blob[] = [];
     let remaining = byteCount;
 
     while (remaining > 0) {
       const piece = pieces[0];
+      if (!piece) {
+        throw new Error("Invalid assembler cut");
+      }
       const take = available(piece);
 
       if (take <= remaining) {
@@ -42,14 +56,14 @@ function createPartAssembler(partSize) {
   }
 
   function takeCompleteParts() {
-    const parts = [];
+    const parts: Blob[] = [];
     while (pendingBytes >= size) {
       parts.push(cut(size));
     }
     return parts;
   }
 
-  function push(blob) {
+  function push(blob: Blob | null | undefined) {
     if (!blob || blob.size <= 0) {
       return [];
     }
@@ -76,16 +90,5 @@ function createPartAssembler(partSize) {
     flush,
     getPendingBytes,
     partSize: size,
-  };
-}
-
-if (typeof module !== "undefined" && module.exports) {
-  module.exports = {
-    UPLOAD_PART_SIZE,
-    MIN_MULTIPART_PART_SIZE,
-    MAX_CONCURRENT_UPLOADS,
-    MAX_QUEUED_BYTES,
-    VOOM_MULTIPART_PART_SIZE,
-    createPartAssembler,
   };
 }

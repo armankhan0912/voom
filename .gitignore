@@ -19,6 +19,8 @@
 
 # production
 /build
+/extension/dist
+/extension/.vite
 
 # misc
 .DS_Store
