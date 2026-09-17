@@ -382,7 +382,6 @@ function RecordSetupOverlay({ onClose }: { onClose: () => void }) {
       cameraEnabled,
       cameraDeviceId: cameraDeviceIdRef.current || cameraDeviceId,
       micEnabled,
-      micDeviceId,
     };
     stopPreview();
     onClose();

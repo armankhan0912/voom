@@ -43,9 +43,6 @@ let cameraStream: MediaStream | null = null;
 let micStream: MediaStream | null = null;
 let displayStream: MediaStream | null = null;
 let recordStream: MediaStream | null = null;
-let audioContext: AudioContext | null = null;
-let micSource: MediaStreamAudioSourceNode | null = null;
-let audioDest: MediaStreamAudioDestinationNode | null = null;
 let recorder: MediaRecorder | null = null;
 let followMicTimer = 0;
 let uploadQueue: VoomUploadQueue | null = null;
@@ -75,43 +72,29 @@ function stopTracks(stream: MediaStream | null | undefined) {
   stream?.getTracks().forEach((track) => track.stop());
 }
 
-function closeAudioGraph() {
-  micSource?.disconnect();
-  micSource = null;
-  if (audioContext && audioContext.state !== "closed") {
-    void audioContext.close().catch(() => {});
-  }
-  audioContext = null;
-  audioDest = null;
+function delay(ms: number) {
+  return new Promise<void>((resolve) => {
+    window.setTimeout(resolve, ms);
+  });
 }
 
-async function ensureAudioGraph() {
-  if (!audioContext || audioContext.state === "closed") {
-    audioContext = new AudioContext();
-    audioDest = audioContext.createMediaStreamDestination();
-    audioContext.addEventListener("statechange", () => {
-      if (
-        audioContext?.state === "suspended" &&
-        (state === "recording" || state === "paused")
-      ) {
-        void audioContext.resume();
-      }
-    });
-  }
-
-  if (audioContext.state === "suspended") {
-    await audioContext.resume();
-  }
-}
-
-function attachMicToGraph(stream: MediaStream) {
-  if (!audioContext || !audioDest) {
+async function waitForAudioUnmute(stream: MediaStream) {
+  const track = stream.getAudioTracks()[0];
+  if (!track?.muted) {
     return;
   }
 
-  micSource?.disconnect();
-  micSource = audioContext.createMediaStreamSource(stream);
-  micSource.connect(audioDest);
+  await Promise.race([
+    new Promise<void>((resolve) => {
+      track.addEventListener("unmute", () => resolve(), { once: true });
+    }),
+    delay(1000),
+  ]);
+}
+
+function closeMicCapture() {
+  stopTracks(micStream);
+  micStream = null;
 }
 
 function rememberMicDevice(stream: MediaStream) {
@@ -133,8 +116,9 @@ function rememberMicDevice(stream: MediaStream) {
 
 function watchMicTrack(stream: MediaStream) {
   stream.getAudioTracks().forEach((track) => {
+    track.enabled = true;
     track.addEventListener("ended", () => {
-      if (micStream !== stream) {
+      if (micStream !== stream || recorder) {
         return;
       }
       void followDefaultMic();
@@ -142,34 +126,56 @@ function watchMicTrack(stream: MediaStream) {
   });
 }
 
-async function acquireMicStream(preferDefault: boolean) {
-  const selectedDeviceId = micDeviceSelect?.value || "";
-  const audio: boolean | MediaTrackConstraints =
-    preferDefault || !selectedDeviceId
-      ? true
-      : { deviceId: { ideal: selectedDeviceId } };
-
-  try {
-    return await navigator.mediaDevices.getUserMedia({
-      audio,
-      video: false,
-    });
-  } catch {
-    return await navigator.mediaDevices.getUserMedia({
-      audio: true,
-      video: false,
-    });
-  }
+async function requestMic(audio: boolean | MediaTrackConstraints) {
+  return navigator.mediaDevices.getUserMedia({ audio, video: false });
 }
 
-async function attachMicStream(stream: MediaStream) {
-  await ensureAudioGraph();
-  const previous = micStream;
-  micStream = stream;
-  attachMicToGraph(stream);
-  rememberMicDevice(stream);
-  watchMicTrack(stream);
-  stopTracks(previous);
+function micTrackLooksLive(stream: MediaStream) {
+  const track = stream.getAudioTracks()[0];
+  return Boolean(track && track.readyState === "live" && track.enabled);
+}
+
+async function acquireDefaultMic() {
+  const attempts: Array<boolean | MediaTrackConstraints> = [
+    {
+      deviceId: { exact: "communications" },
+      echoCancellation: false,
+    },
+    {
+      deviceId: { exact: "default" },
+      echoCancellation: false,
+    },
+    {
+      deviceId: { ideal: "default" },
+      echoCancellation: false,
+    },
+    true,
+  ];
+
+  let lastError: unknown;
+  for (const audio of attempts) {
+    try {
+      const stream = await requestMic(audio);
+      const track = stream.getAudioTracks()[0];
+      if (!track) {
+        stopTracks(stream);
+        continue;
+      }
+      track.enabled = true;
+      await waitForAudioUnmute(stream);
+      if (!micTrackLooksLive(stream)) {
+        stopTracks(stream);
+        continue;
+      }
+      return stream;
+    } catch (error) {
+      lastError = error;
+    }
+  }
+
+  throw lastError instanceof Error
+    ? lastError
+    : new Error("Microphone is on, but Chrome did not provide an audio track.");
 }
 
 function broadcast() {
@@ -253,47 +259,32 @@ function fillSelect(
 
 async function openMicIfNeeded() {
   if (!micEnabledInput?.checked) {
-    stopTracks(micStream);
-    micStream = null;
-    micSource?.disconnect();
-    micSource = null;
+    closeMicCapture();
     return;
   }
 
-  const stream = await acquireMicStream(false);
-  if (!stream.getAudioTracks().length) {
-    stopTracks(stream);
-    throw new Error("Microphone is on, but Chrome did not provide an audio track.");
-  }
+  closeMicCapture();
+  await delay(80);
 
-  await attachMicStream(stream);
+  const stream = await acquireDefaultMic();
+  micStream = stream;
+  rememberMicDevice(stream);
+  watchMicTrack(stream);
 }
 
 async function followDefaultMic() {
-  if (!micEnabledInput?.checked) {
+  if (!micEnabledInput?.checked || recorder) {
     return;
   }
 
-  if (state === "stopping" || state === "completed" || state === "error") {
+  if (state !== "screen_selection") {
     return;
   }
 
   try {
-    const stream = await acquireMicStream(true);
-    if (!stream.getAudioTracks().length) {
-      stopTracks(stream);
-      return;
-    }
-
-    if (state === "recording" || state === "paused") {
-      await attachMicStream(stream);
-      return;
-    }
-
-    rememberMicDevice(stream);
-    stopTracks(stream);
+    await openMicIfNeeded();
   } catch {
-    // Keep the current capture if the new default mic is unavailable.
+    // Keep going; startRecording still requires a live mic track.
   }
 }
 
@@ -309,12 +300,10 @@ function buildRecordStream() {
   displayStream?.getVideoTracks().forEach((track) => mixed.addTrack(track));
 
   if (micEnabledInput?.checked) {
-    const mixedAudio = audioDest?.stream.getAudioTracks() ?? [];
-    if (mixedAudio.length) {
-      mixedAudio.forEach((track) => mixed.addTrack(track));
-    } else {
-      micStream?.getAudioTracks().forEach((track) => mixed.addTrack(track));
-    }
+    micStream?.getAudioTracks().forEach((track) => {
+      track.enabled = true;
+      mixed.addTrack(track);
+    });
   }
 
   return mixed;
@@ -534,17 +523,15 @@ export async function startRecording() {
   setState("screen_selection");
 
   try {
-    displayStream = await captureDisplay();
     await openMicIfNeeded();
+    displayStream = await captureDisplay();
   } catch (error) {
     if (!isCancelled(error)) {
       console.error("[voom] recording failed", error);
     }
     stopTracks(displayStream);
-    stopTracks(micStream);
-    closeAudioGraph();
+    closeMicCapture();
     displayStream = null;
-    micStream = null;
     void sendVoomMessage({ type: "voom-capture-cancelled" }).catch(() => {});
     return;
   }
@@ -552,10 +539,8 @@ export async function startRecording() {
   const displayTrack = displayStream?.getVideoTracks()[0];
   if (!displayStream?.getVideoTracks().length || !isDisplayTrack(displayTrack)) {
     displayStream?.getTracks().forEach((track) => track.stop());
-    stopTracks(micStream);
-    closeAudioGraph();
+    closeMicCapture();
     displayStream = null;
-    micStream = null;
     void sendVoomMessage({ type: "voom-capture-cancelled" }).catch(() => {});
     return;
   }
@@ -575,9 +560,8 @@ export async function startRecording() {
   if (micEnabledInput?.checked && audioTracks.length === 0) {
     console.error("[voom] microphone is on, but the combined recording stream has no audio track");
     stopTracks(displayStream);
-    stopTracks(micStream);
     stopTracks(recordStream);
-    closeAudioGraph();
+    closeMicCapture();
     void sendVoomMessage({ type: "voom-capture-cancelled" }).catch(() => {});
     return;
   }
@@ -627,11 +611,9 @@ export async function startRecording() {
   } catch (error) {
     console.error("[voom] upload session failed", error);
     stopTracks(displayStream);
-    stopTracks(micStream);
     stopTracks(recordStream);
-    closeAudioGraph();
+    closeMicCapture();
     displayStream = null;
-    micStream = null;
     recordStream = null;
     recorder = null;
     uploadQueue = null;
@@ -712,11 +694,9 @@ async function finalizeUpload() {
   recordedMs = 0;
 
   stopTracks(displayStream);
-  stopTracks(micStream);
   stopTracks(recordStream);
-  closeAudioGraph();
+  closeMicCapture();
   displayStream = null;
-  micStream = null;
   recordStream = null;
   recorder = null;
   pausedByUpload = false;
@@ -855,10 +835,9 @@ if (navigator.mediaDevices?.addEventListener) {
 window.addEventListener("beforeunload", () => {
   window.clearTimeout(followMicTimer);
   stopTracks(cameraStream);
-  stopTracks(micStream);
   stopTracks(displayStream);
   stopTracks(recordStream);
-  closeAudioGraph();
+  closeMicCapture();
   const videoId = uploadQueue?.getState().videoId;
   // Stopping means finish() is in flight — do not abort that upload.
   if (videoId && state !== "completed" && state !== "stopping" && !bytesOnR2) {
