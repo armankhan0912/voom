@@ -11,14 +11,20 @@
     "service_worker": "background.ts",
     "type": "module"
   },
-  "permissions": ["tabs", "scripting", "storage", "desktopCapture"],
+  "permissions": ["tabs", "scripting", "storage", "desktopCapture", "cookies"],
   "host_permissions": ["http://*/*", "https://*/*"],
   "externally_connectable": {
-    "matches": ["https://voom-video.vercel.app/*"]
+    "matches": [
+      "https://voom-video.vercel.app/*",
+      "http://localhost:3000/*"
+    ]
   },
   "content_scripts": [
     {
-      "matches": ["https://voom-video.vercel.app/*"],
+      "matches": [
+        "https://voom-video.vercel.app/*",
+        "http://localhost:3000/*"
+      ],
       "js": ["bridge.ts"],
       "run_at": "document_start"
     }

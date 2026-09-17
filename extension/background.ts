@@ -691,28 +691,61 @@ chrome.tabs.onRemoved.addListener((tabId) => {
   })();
 });
 
+async function getClerkSessionToken() {
+  try {
+    const cookie = await chrome.cookies.get({
+      url: VOOM_APP_URL,
+      name: "__session",
+    });
+    return cookie?.value ?? null;
+  } catch {
+    return null;
+  }
+}
+
+function isSignedOutResponse(response: Response) {
+  if (response.status === 401) {
+    return true;
+  }
+
+  if (response.status >= 300 && response.status < 400) {
+    return true;
+  }
+
+  return response.headers.get("x-clerk-auth-status") === "signed-out";
+}
+
 async function voomApi<T>(path: string, body?: unknown): Promise<T> {
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+  };
+  const token = await getClerkSessionToken();
+  if (token) {
+    headers.Authorization = `Bearer ${token}`;
+  }
+
   const response = await fetch(`${VOOM_APP_URL}${path}`, {
     method: "POST",
     credentials: "include",
-    headers: { "Content-Type": "application/json" },
+    redirect: "manual",
+    headers,
     body: JSON.stringify(body ?? {}),
   });
 
-  if (response.status === 401) {
+  if (isSignedOutResponse(response)) {
     await chrome.tabs.create({ url: `${VOOM_APP_URL}/sign-in` });
     throw new Error("Sign in to Voom in the browser first");
   }
 
   if (!response.ok) {
-    let message = "Request failed";
+    let message = `Request failed (${response.status})`;
     try {
       const payload = (await response.json()) as { error?: unknown };
       if (typeof payload.error === "string" && payload.error) {
         message = payload.error;
       }
     } catch {
-      // Keep the generic message.
+      // Keep the status-aware message.
     }
     throw new Error(message);
   }
@@ -794,23 +827,7 @@ async function abortUpload(message: AbortUploadInput) {
 
 async function presignUpload(contentType: string | undefined) {
   const type = contentType?.startsWith("video/mp4") ? "video/mp4" : "video/webm";
-  const presignResponse = await fetch(`${VOOM_APP_URL}/api/uploads/presign`, {
-    method: "POST",
-    credentials: "include",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ contentType: type }),
-  });
-
-  if (presignResponse.status === 401) {
-    await chrome.tabs.create({ url: `${VOOM_APP_URL}/sign-in` });
-    throw new Error("Sign in to Voom in the browser first");
-  }
-
-  if (!presignResponse.ok) {
-    throw new Error("Could not start upload");
-  }
-
-  return presignResponse.json() as Promise<PresignResult>;
+  return voomApi<PresignResult>("/api/uploads/presign", { contentType: type });
 }
 
 async function showReadyVideo(videoId: string) {
@@ -842,28 +859,10 @@ async function completeUpload(message: CompleteUploadInput) {
 
   console.log("[voom] POST /api/videos/:id/complete", videoId, { failed });
 
-  const completeResponse = await fetch(
-    `${VOOM_APP_URL}/api/videos/${videoId}/complete`,
-    {
-      method: "POST",
-      credentials: "include",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(
-        failed ? { failed: true } : { duration: message.duration ?? 0 },
-      ),
-    },
+  const payload = await voomApi<unknown>(
+    `/api/videos/${videoId}/complete`,
+    failed ? { failed: true } : { duration: message.duration ?? 0 },
   );
-
-  if (completeResponse.status === 401) {
-    await chrome.tabs.create({ url: `${VOOM_APP_URL}/sign-in` });
-    throw new Error("Sign in to Voom in the browser first");
-  }
-
-  if (!completeResponse.ok) {
-    throw new Error("Could not finalize video");
-  }
-
-  const payload: unknown = await completeResponse.json();
 
   if (!failed) {
     await setSession({ videoId, uploadSettled: true });

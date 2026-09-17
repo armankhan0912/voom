@@ -29,10 +29,21 @@ function isPublicRoute(request: Request, pathname: string) {
   );
 }
 
+function isApiRoute(pathname: string) {
+  return pathname === "/api" || pathname.startsWith("/api/");
+}
+
 export default clerkMiddleware(async (auth, req) => {
-  if (!isPublicRoute(req, req.nextUrl.pathname)) {
-    await auth.protect();
+  const pathname = req.nextUrl.pathname;
+
+  // API routes return JSON 401 themselves. auth.protect() rewrites unsigned
+  // extension requests into an HTML 404 (dev-browser-missing), which the
+  // recorder surfaces as a generic "Request failed".
+  if (isPublicRoute(req, pathname) || isApiRoute(pathname)) {
+    return;
   }
+
+  await auth.protect();
 });
 
 export const config = {
