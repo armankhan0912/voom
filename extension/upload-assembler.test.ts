@@ -7,7 +7,7 @@ const PART_SIZE = UPLOAD_PART_SIZE;
 
 type UploadedRecord = {
   size: number;
-  bytes: Uint8Array;
+  bytes: Uint8Array<ArrayBuffer>;
   url: string;
   partNumber?: number;
 };
@@ -16,7 +16,7 @@ function filledBlob(size: number, value: number) {
   return new Blob([new Uint8Array(size).fill(value)]);
 }
 
-async function readBytes(blob: Blob) {
+async function readBytes(blob: Blob): Promise<Uint8Array<ArrayBuffer>> {
   return new Uint8Array(await blob.arrayBuffer());
 }
 
@@ -56,8 +56,9 @@ describe("createPartAssembler", () => {
     const first = parts[0];
     assert.equal(first?.size, PART_SIZE);
     assert.equal(trailing?.size, 2 * 1024 * 1024);
-    assert.ok(first);
-    assert.ok(trailing);
+    if (!first || !trailing) {
+      throw new Error("expected a complete part and leftover bytes");
+    }
     assert.deepEqual(await concatBytes([first, trailing]), await concatBytes([a, b, c]));
   });
 
@@ -71,8 +72,9 @@ describe("createPartAssembler", () => {
     const first = parts[0];
     assert.equal(first?.size, PART_SIZE);
     assert.equal(trailing?.size, 1500);
-    assert.ok(first);
-    assert.ok(trailing);
+    if (!first || !trailing) {
+      throw new Error("expected a complete part and leftover bytes");
+    }
     assert.deepEqual(await concatBytes([first, trailing]), await readBytes(source));
   });
 
@@ -228,7 +230,7 @@ describe("createVoomUploadQueue hybrid upload", () => {
       await concatBytes(
         [...uploaded]
           .sort((left, right) => right.size - left.size)
-          .map((part) => new Blob([part.bytes.buffer])),
+          .map((part) => new Blob([new Uint8Array(part.bytes)])),
       ),
       await readBytes(source),
     );
