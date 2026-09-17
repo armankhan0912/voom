@@ -43,7 +43,11 @@ let cameraStream: MediaStream | null = null;
 let micStream: MediaStream | null = null;
 let displayStream: MediaStream | null = null;
 let recordStream: MediaStream | null = null;
+let audioContext: AudioContext | null = null;
+let micSource: MediaStreamAudioSourceNode | null = null;
+let audioDest: MediaStreamAudioDestinationNode | null = null;
 let recorder: MediaRecorder | null = null;
+let followMicTimer = 0;
 let uploadQueue: VoomUploadQueue | null = null;
 let pausedByUpload = false;
 let bytesOnR2 = false;
@@ -69,6 +73,103 @@ function setStatus(message: string) {
 
 function stopTracks(stream: MediaStream | null | undefined) {
   stream?.getTracks().forEach((track) => track.stop());
+}
+
+function closeAudioGraph() {
+  micSource?.disconnect();
+  micSource = null;
+  if (audioContext && audioContext.state !== "closed") {
+    void audioContext.close().catch(() => {});
+  }
+  audioContext = null;
+  audioDest = null;
+}
+
+async function ensureAudioGraph() {
+  if (!audioContext || audioContext.state === "closed") {
+    audioContext = new AudioContext();
+    audioDest = audioContext.createMediaStreamDestination();
+    audioContext.addEventListener("statechange", () => {
+      if (
+        audioContext?.state === "suspended" &&
+        (state === "recording" || state === "paused")
+      ) {
+        void audioContext.resume();
+      }
+    });
+  }
+
+  if (audioContext.state === "suspended") {
+    await audioContext.resume();
+  }
+}
+
+function attachMicToGraph(stream: MediaStream) {
+  if (!audioContext || !audioDest) {
+    return;
+  }
+
+  micSource?.disconnect();
+  micSource = audioContext.createMediaStreamSource(stream);
+  micSource.connect(audioDest);
+}
+
+function rememberMicDevice(stream: MediaStream) {
+  const track = stream.getAudioTracks()[0];
+  const usedId = track?.getSettings().deviceId || "";
+  if (!usedId || !micDeviceSelect) {
+    return;
+  }
+
+  if (!Array.from(micDeviceSelect.options).some((option) => option.value === usedId)) {
+    const option = document.createElement("option");
+    option.value = usedId;
+    option.textContent = track?.label || "Microphone";
+    micDeviceSelect.append(option);
+  }
+
+  micDeviceSelect.value = usedId;
+}
+
+function watchMicTrack(stream: MediaStream) {
+  stream.getAudioTracks().forEach((track) => {
+    track.addEventListener("ended", () => {
+      if (micStream !== stream) {
+        return;
+      }
+      void followDefaultMic();
+    });
+  });
+}
+
+async function acquireMicStream(preferDefault: boolean) {
+  const selectedDeviceId = micDeviceSelect?.value || "";
+  const audio: boolean | MediaTrackConstraints =
+    preferDefault || !selectedDeviceId
+      ? true
+      : { deviceId: { ideal: selectedDeviceId } };
+
+  try {
+    return await navigator.mediaDevices.getUserMedia({
+      audio,
+      video: false,
+    });
+  } catch {
+    return await navigator.mediaDevices.getUserMedia({
+      audio: true,
+      video: false,
+    });
+  }
+}
+
+async function attachMicStream(stream: MediaStream) {
+  await ensureAudioGraph();
+  const previous = micStream;
+  micStream = stream;
+  attachMicToGraph(stream);
+  rememberMicDevice(stream);
+  watchMicTrack(stream);
+  stopTracks(previous);
 }
 
 function broadcast() {
@@ -151,45 +252,69 @@ function fillSelect(
 }
 
 async function openMicIfNeeded() {
-  stopTracks(micStream);
-  micStream = null;
+  if (!micEnabledInput?.checked) {
+    stopTracks(micStream);
+    micStream = null;
+    micSource?.disconnect();
+    micSource = null;
+    return;
+  }
 
+  const stream = await acquireMicStream(false);
+  if (!stream.getAudioTracks().length) {
+    stopTracks(stream);
+    throw new Error("Microphone is on, but Chrome did not provide an audio track.");
+  }
+
+  await attachMicStream(stream);
+}
+
+async function followDefaultMic() {
   if (!micEnabledInput?.checked) {
     return;
   }
 
-  const selectedDeviceId = micDeviceSelect?.value || "";
-  const audio: boolean | MediaTrackConstraints = selectedDeviceId
-    ? { deviceId: { ideal: selectedDeviceId } }
-    : true;
+  if (state === "stopping" || state === "completed" || state === "error") {
+    return;
+  }
 
   try {
-    micStream = await navigator.mediaDevices.getUserMedia({
-      audio,
-      video: false,
-    });
-  } catch {
-    try {
-      micStream = await navigator.mediaDevices.getUserMedia({
-        audio: true,
-        video: false,
-      });
-    } catch {
-      throw new Error("Microphone is on, but Chrome did not provide an audio track.");
+    const stream = await acquireMicStream(true);
+    if (!stream.getAudioTracks().length) {
+      stopTracks(stream);
+      return;
     }
-  }
 
-  if (!micStream?.getAudioTracks().length) {
-    throw new Error("Microphone is on, but Chrome did not provide an audio track.");
+    if (state === "recording" || state === "paused") {
+      await attachMicStream(stream);
+      return;
+    }
+
+    rememberMicDevice(stream);
+    stopTracks(stream);
+  } catch {
+    // Keep the current capture if the new default mic is unavailable.
   }
+}
+
+function scheduleFollowDefaultMic() {
+  window.clearTimeout(followMicTimer);
+  followMicTimer = window.setTimeout(() => {
+    void followDefaultMic();
+  }, 400);
 }
 
 function buildRecordStream() {
   const mixed = new MediaStream();
   displayStream?.getVideoTracks().forEach((track) => mixed.addTrack(track));
 
-  if (micEnabledInput?.checked && micStream) {
-    micStream.getAudioTracks().forEach((track) => mixed.addTrack(track));
+  if (micEnabledInput?.checked) {
+    const mixedAudio = audioDest?.stream.getAudioTracks() ?? [];
+    if (mixedAudio.length) {
+      mixedAudio.forEach((track) => mixed.addTrack(track));
+    } else {
+      micStream?.getAudioTracks().forEach((track) => mixed.addTrack(track));
+    }
   }
 
   return mixed;
@@ -417,6 +542,7 @@ export async function startRecording() {
     }
     stopTracks(displayStream);
     stopTracks(micStream);
+    closeAudioGraph();
     displayStream = null;
     micStream = null;
     void sendVoomMessage({ type: "voom-capture-cancelled" }).catch(() => {});
@@ -426,6 +552,10 @@ export async function startRecording() {
   const displayTrack = displayStream?.getVideoTracks()[0];
   if (!displayStream?.getVideoTracks().length || !isDisplayTrack(displayTrack)) {
     displayStream?.getTracks().forEach((track) => track.stop());
+    stopTracks(micStream);
+    closeAudioGraph();
+    displayStream = null;
+    micStream = null;
     void sendVoomMessage({ type: "voom-capture-cancelled" }).catch(() => {});
     return;
   }
@@ -447,6 +577,7 @@ export async function startRecording() {
     stopTracks(displayStream);
     stopTracks(micStream);
     stopTracks(recordStream);
+    closeAudioGraph();
     void sendVoomMessage({ type: "voom-capture-cancelled" }).catch(() => {});
     return;
   }
@@ -498,6 +629,7 @@ export async function startRecording() {
     stopTracks(displayStream);
     stopTracks(micStream);
     stopTracks(recordStream);
+    closeAudioGraph();
     displayStream = null;
     micStream = null;
     recordStream = null;
@@ -582,6 +714,7 @@ async function finalizeUpload() {
   stopTracks(displayStream);
   stopTracks(micStream);
   stopTracks(recordStream);
+  closeAudioGraph();
   displayStream = null;
   micStream = null;
   recordStream = null;
@@ -715,11 +848,17 @@ function connectRecorderPort() {
 
 connectRecorderPort();
 
+if (navigator.mediaDevices?.addEventListener) {
+  navigator.mediaDevices.addEventListener("devicechange", scheduleFollowDefaultMic);
+}
+
 window.addEventListener("beforeunload", () => {
+  window.clearTimeout(followMicTimer);
   stopTracks(cameraStream);
   stopTracks(micStream);
   stopTracks(displayStream);
   stopTracks(recordStream);
+  closeAudioGraph();
   const videoId = uploadQueue?.getState().videoId;
   // Stopping means finish() is in flight — do not abort that upload.
   if (videoId && state !== "completed" && state !== "stopping" && !bytesOnR2) {

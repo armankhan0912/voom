@@ -140,7 +140,12 @@ function RecordSetupOverlay({ onClose }: { onClose: () => void }) {
       }));
     setCameras(nextCameras);
     setMics(nextMics);
-    setMicDeviceId((current) => current || nextMics[0]?.deviceId || "");
+    setMicDeviceId((current) => {
+      if (current && nextMics.some((device) => device.deviceId === current)) {
+        return current;
+      }
+      return nextMics[0]?.deviceId || "";
+    });
   }, []);
 
   const startPreview = useCallback(async (deviceId: string) => {
@@ -174,7 +179,11 @@ function RecordSetupOverlay({ onClose }: { onClose: () => void }) {
         }
       }
       previous?.getTracks().forEach((track) => track.stop());
+      const defaultMicId = stream.getAudioTracks()[0]?.getSettings().deviceId || "";
       stream.getAudioTracks().forEach((track) => track.stop());
+      if (defaultMicId) {
+        setMicDeviceId((current) => current || defaultMicId);
+      }
 
       const usedId = stream.getVideoTracks()[0]?.getSettings().deviceId || deviceId;
       if (usedId && !cameraDeviceIdRef.current) {
@@ -196,6 +205,79 @@ function RecordSetupOverlay({ onClose }: { onClose: () => void }) {
   useEffect(() => {
     cameraDeviceIdRef.current = cameraDeviceId;
   }, [cameraDeviceId]);
+
+  useEffect(() => {
+    if (!micEnabled || typeof navigator.mediaDevices?.addEventListener !== "function") {
+      return;
+    }
+
+    let cancelled = false;
+    let timer = 0;
+
+    async function followDefaultMic() {
+      try {
+        const probe = await navigator.mediaDevices.getUserMedia({
+          audio: true,
+          video: false,
+        });
+        const defaultId = probe.getAudioTracks()[0]?.getSettings().deviceId || "";
+        const defaultLabel = probe.getAudioTracks()[0]?.label || "Microphone";
+        probe.getTracks().forEach((track) => track.stop());
+        if (cancelled) {
+          return;
+        }
+
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        if (cancelled) {
+          return;
+        }
+
+        const nextCameras = devices
+          .filter((device) => device.kind === "videoinput")
+          .map((device, index) => ({
+            deviceId: device.deviceId,
+            label: device.label || `Camera ${index + 1}`,
+          }));
+        const nextMics = devices
+          .filter((device) => device.kind === "audioinput")
+          .map((device, index) => ({
+            deviceId: device.deviceId,
+            label: device.label || `Microphone ${index + 1}`,
+          }));
+        if (defaultId && !nextMics.some((device) => device.deviceId === defaultId)) {
+          nextMics.unshift({ deviceId: defaultId, label: defaultLabel });
+        }
+
+        setCameras(nextCameras);
+        setMics(nextMics);
+        if (defaultId) {
+          setMicDeviceId(defaultId);
+        } else if (nextMics[0]) {
+          setMicDeviceId(nextMics[0].deviceId);
+        }
+      } catch {
+        await fillDevices();
+      }
+    }
+
+    if (!cameraEnabled) {
+      void followDefaultMic();
+    }
+
+    function onDeviceChange() {
+      window.clearTimeout(timer);
+      timer = window.setTimeout(() => {
+        void followDefaultMic();
+      }, 400);
+    }
+
+    navigator.mediaDevices.addEventListener("devicechange", onDeviceChange);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+      navigator.mediaDevices.removeEventListener("devicechange", onDeviceChange);
+    };
+  }, [cameraEnabled, fillDevices, micEnabled]);
 
   useEffect(() => {
     function onMessage(event: MessageEvent) {
