@@ -589,31 +589,6 @@ export function VideoPlayer({
           >
             {muted ? <MutedIcon /> : <VolumeIcon />}
           </button>
-          <label className="sr-only" htmlFor="voom-volume">
-            Volume
-          </label>
-          <input
-            id="voom-volume"
-            type="range"
-            min={0}
-            max={1}
-            step={0.05}
-            value={muted ? 0 : volume}
-            aria-label="Volume"
-            title="Volume"
-            className="h-1 w-12 min-w-0 cursor-pointer accent-voom-accent sm:w-16"
-            onChange={(event) => changeVolume(Number(event.target.value))}
-            onKeyDown={(event) => {
-              if (
-                event.key === "ArrowUp" ||
-                event.key === "ArrowDown" ||
-                event.key === "ArrowLeft" ||
-                event.key === "ArrowRight"
-              ) {
-                event.preventDefault();
-              }
-            }}
-          />
 
           <div className="ml-auto flex shrink-0 items-center gap-0.5">
             <div className="relative">
