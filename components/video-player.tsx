@@ -44,7 +44,16 @@ function isEditableTarget(target: EventTarget | null) {
   }
 
   const tag = target.tagName;
-  return tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT";
+  if (tag === "TEXTAREA" || tag === "SELECT") {
+    return true;
+  }
+
+  if (tag !== "INPUT") {
+    return false;
+  }
+
+  const type = (target as HTMLInputElement).type;
+  return type !== "range" && type !== "button" && type !== "checkbox" && type !== "radio";
 }
 
 function controlButtonClass(extra = "") {
@@ -337,6 +346,8 @@ export function VideoPlayer({
       const volumeValue = Math.min(1, Math.max(0, next));
       video.volume = volumeValue;
       video.muted = volumeValue === 0;
+      setVolume(volumeValue);
+      setMuted(volumeValue === 0);
       syncFromVideo();
     },
     [syncFromVideo, videoRef],
@@ -416,24 +427,33 @@ export function VideoPlayer({
       togglePlay();
       return;
     }
-    if (key === "ArrowLeft") {
+    if (key === "ArrowLeft" || key === "ArrowRight") {
       event.preventDefault();
-      skip(-SEEK_STEP);
-      return;
-    }
-    if (key === "ArrowRight") {
-      event.preventDefault();
-      skip(SEEK_STEP);
+      event.stopPropagation();
+      const target = event.target;
+      if (target instanceof HTMLInputElement && target.type === "range") {
+        const video = videoRef.current;
+        const current = video?.muted ? 0 : (video?.volume ?? volume);
+        changeVolume(current + (key === "ArrowRight" ? VOLUME_STEP : -VOLUME_STEP));
+        return;
+      }
+      skip(key === "ArrowRight" ? SEEK_STEP : -SEEK_STEP);
       return;
     }
     if (key === "ArrowUp") {
       event.preventDefault();
-      changeVolume((videoRef.current?.volume ?? volume) + VOLUME_STEP);
+      event.stopPropagation();
+      const video = videoRef.current;
+      const current = video?.muted ? 0 : (video?.volume ?? volume);
+      changeVolume(current + VOLUME_STEP);
       return;
     }
     if (key === "ArrowDown") {
       event.preventDefault();
-      changeVolume((videoRef.current?.volume ?? volume) - VOLUME_STEP);
+      event.stopPropagation();
+      const video = videoRef.current;
+      const current = video?.muted ? 0 : (video?.volume ?? volume);
+      changeVolume(current - VOLUME_STEP);
       return;
     }
     if (key === "m" || key === "M") {
@@ -461,9 +481,9 @@ export function VideoPlayer({
     <div
       ref={rootRef}
       className={
-        embed
+        embed || fullscreen
           ? "relative h-full w-full overflow-hidden bg-black"
-          : "relative overflow-hidden rounded-[20px] bg-black shadow-[0_8px_28px_rgba(23,23,23,0.12)]"
+          : "relative aspect-video overflow-hidden rounded-[20px] bg-black shadow-[0_8px_28px_rgba(23,23,23,0.12)] fullscreen:h-full fullscreen:w-full fullscreen:rounded-none fullscreen:shadow-none"
       }
       tabIndex={0}
       role="region"
@@ -479,11 +499,7 @@ export function VideoPlayer({
     >
       <video
         ref={videoRef}
-        className={
-          embed
-            ? "voom-watch-video h-full w-full object-contain"
-            : "voom-watch-video aspect-video w-full"
-        }
+        className="voom-watch-video absolute inset-0 h-full w-full object-cover"
         src={src}
         playsInline
         preload="auto"
@@ -587,6 +603,16 @@ export function VideoPlayer({
             title="Volume"
             className="h-1 w-12 min-w-0 cursor-pointer accent-voom-accent sm:w-16"
             onChange={(event) => changeVolume(Number(event.target.value))}
+            onKeyDown={(event) => {
+              if (
+                event.key === "ArrowUp" ||
+                event.key === "ArrowDown" ||
+                event.key === "ArrowLeft" ||
+                event.key === "ArrowRight"
+              ) {
+                event.preventDefault();
+              }
+            }}
           />
 
           <div className="ml-auto flex shrink-0 items-center gap-0.5">
