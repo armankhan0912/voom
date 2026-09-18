@@ -2,9 +2,10 @@
 
 import { useEffect, useState } from "react";
 import { useWatchPlayer } from "@/components/watch-player-context";
-import type {
-  TranscriptSegment,
-  TranscriptStatus,
+import {
+  looksLikeCombinedTranscript,
+  type TranscriptSegment,
+  type TranscriptStatus,
 } from "@/lib/transcription/types";
 
 const POLL_INTERVAL_MS = 2500;
@@ -70,11 +71,12 @@ export function Transcript({ videoId }: { videoId: string }) {
         }
 
         const nextStatus = payload.status ?? "processing";
+        const nextSegments = Array.isArray(payload.segments) ? payload.segments : [];
         setLoadError(false);
         setStatus(nextStatus);
-        setSegments(Array.isArray(payload.segments) ? payload.segments : []);
+        setSegments(nextSegments);
 
-        if (isPollable(nextStatus)) {
+        if (isPollable(nextStatus) || looksLikeCombinedTranscript(nextSegments)) {
           timeoutId = window.setTimeout(load, POLL_INTERVAL_MS);
         }
       } catch {

@@ -8,6 +8,7 @@ import {
   getAssemblyAITranscript,
   getEnglishTranscriptSegments,
 } from "@/lib/transcription/assemblyai";
+import { looksLikeCombinedTranscript } from "@/lib/transcription/types";
 
 export async function markTranscriptFailedByVideoId(
   videoId: string,
@@ -30,7 +31,22 @@ function scheduleAfterTranscriptReady(videoId: string) {
   });
 }
 
+const refreshingJobs = new Set<string>();
+
 export async function persistAssemblyAIResult(providerJobId: string) {
+  if (refreshingJobs.has(providerJobId)) {
+    return;
+  }
+
+  refreshingJobs.add(providerJobId);
+  try {
+    await persistAssemblyAIResultInner(providerJobId);
+  } finally {
+    refreshingJobs.delete(providerJobId);
+  }
+}
+
+async function persistAssemblyAIResultInner(providerJobId: string) {
   const rows = await db
     .select()
     .from(transcripts)
@@ -42,7 +58,11 @@ export async function persistAssemblyAIResult(providerJobId: string) {
     return;
   }
 
-  if (transcript.status === "ready") {
+  const refreshingCombined =
+    transcript.status === "ready" &&
+    looksLikeCombinedTranscript(transcript.segments);
+
+  if (transcript.status === "ready" && !refreshingCombined) {
     scheduleAfterTranscriptReady(transcript.videoId);
     return;
   }
@@ -50,6 +70,10 @@ export async function persistAssemblyAIResult(providerJobId: string) {
   const job = await getAssemblyAITranscript(providerJobId);
 
   if (job.status === "error") {
+    if (refreshingCombined) {
+      return;
+    }
+
     await db
       .update(transcripts)
       .set({
@@ -81,6 +105,10 @@ export async function persistAssemblyAIResult(providerJobId: string) {
 
     scheduleAfterTranscriptReady(transcript.videoId);
   } catch (caught) {
+    if (refreshingCombined) {
+      return;
+    }
+
     const message =
       caught instanceof Error ? caught.message : "Could not save transcript";
     await db

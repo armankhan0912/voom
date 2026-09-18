@@ -1,8 +1,11 @@
+import { after } from "next/server";
 import { eq } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { transcripts, videos } from "@/lib/db/schema";
 import { getCurrentDbUser } from "@/lib/current-user";
+import { persistAssemblyAIResult } from "@/lib/transcription/persist";
 import { serializeTranscript } from "@/lib/transcription/serialize";
+import { looksLikeCombinedTranscript } from "@/lib/transcription/types";
 import { VIDEO_ID_PATTERN } from "@/lib/videos";
 
 export async function GET(
@@ -43,6 +46,17 @@ export async function GET(
       error: null,
       language: null,
       segments: null,
+    });
+  }
+
+  if (
+    isOwner &&
+    transcript.status === "ready" &&
+    transcript.providerJobId &&
+    looksLikeCombinedTranscript(transcript.segments)
+  ) {
+    after(() => {
+      void persistAssemblyAIResult(transcript.providerJobId as string);
     });
   }
 

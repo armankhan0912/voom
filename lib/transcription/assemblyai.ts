@@ -88,6 +88,107 @@ export function mapUtterancesToEnglishSegments(
     .filter((segment): segment is TranscriptSegment => segment != null);
 }
 
+function splitTextByWeights(text: string, weights: number[]): string[] {
+  const words = text.split(/\s+/).filter(Boolean);
+  if (words.length === 0) {
+    return weights.map(() => "");
+  }
+
+  const total = weights.reduce((sum, weight) => sum + weight, 0) || 1;
+  const parts: string[] = [];
+  let cursor = 0;
+
+  for (let index = 0; index < weights.length; index += 1) {
+    if (index === weights.length - 1 || cursor >= words.length) {
+      parts.push(words.slice(cursor).join(" "));
+      cursor = words.length;
+      continue;
+    }
+
+    const remainingSlots = weights.length - index;
+    const remainingWords = words.length - cursor;
+    const share = Math.max(
+      1,
+      Math.min(
+        remainingWords - remainingSlots + 1,
+        Math.round((words.length * weights[index]) / total),
+      ),
+    );
+    const next = Math.min(words.length, cursor + share);
+    parts.push(words.slice(cursor, next).join(" "));
+    cursor = next;
+  }
+
+  return parts;
+}
+
+function splitTranslatedText(translated: string, originalTexts: string[]): string[] {
+  if (originalTexts.length <= 1) {
+    return [translated];
+  }
+
+  const punctuated = translated
+    .split(/(?<=[.?!।])\s+/)
+    .map((part) => part.trim())
+    .filter((part) => part.length > 0);
+
+  if (punctuated.length === originalTexts.length) {
+    return punctuated;
+  }
+
+  return splitTextByWeights(
+    translated,
+    originalTexts.map((text) => Math.max(text.trim().length, 1)),
+  );
+}
+
+export function applyEnglishTranslationsToSentences(
+  sentences: TranscriptSegment[],
+  utterances: AssemblyAIUtterance[],
+): TranscriptSegment[] {
+  if (sentences.length === 0 || utterances.length === 0) {
+    return sentences;
+  }
+
+  const mapped = sentences.map((sentence) => ({ ...sentence }));
+
+  for (const utterance of utterances) {
+    const translated = utterance.translated_texts?.en?.trim();
+    if (!translated) {
+      continue;
+    }
+
+    const start = millisecondsToSeconds(utterance.start);
+    const end = millisecondsToSeconds(utterance.end);
+    const indexes: number[] = [];
+
+    for (let index = 0; index < mapped.length; index += 1) {
+      const sentence = mapped[index];
+      if (sentence.start >= start - 0.05 && sentence.start < end + 0.05) {
+        indexes.push(index);
+      }
+    }
+
+    if (indexes.length === 0) {
+      continue;
+    }
+
+    const parts = splitTranslatedText(
+      translated,
+      indexes.map((index) => mapped[index].text),
+    );
+
+    indexes.forEach((index, offset) => {
+      const part = parts[offset]?.trim();
+      if (part) {
+        mapped[index] = { ...mapped[index], text: part };
+      }
+    });
+  }
+
+  return mapped;
+}
+
 async function assemblyaiRequest<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${ASSEMBLYAI_BASE_URL}${path}`, {
     ...init,
@@ -158,10 +259,12 @@ export async function getAssemblyAISentenceSegments(id: string) {
 }
 
 export async function getEnglishTranscriptSegments(job: AssemblyAITranscript) {
-  const fromUtterances = mapUtterancesToEnglishSegments(job.utterances ?? []);
-  if (fromUtterances.length > 0) {
-    return fromUtterances;
+  const sentences = await getAssemblyAISentenceSegments(job.id);
+  const utterances = job.utterances ?? [];
+
+  if (sentences.length === 0) {
+    return mapUtterancesToEnglishSegments(utterances);
   }
 
-  return getAssemblyAISentenceSegments(job.id);
+  return applyEnglishTranslationsToSentences(sentences, utterances);
 }
