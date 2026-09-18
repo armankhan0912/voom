@@ -28,17 +28,31 @@ function isPollable(status: TranscriptStatus | null) {
   return status == null || status === "pending" || status === "processing";
 }
 
+function activeStartAtTime(items: Array<{ start: number; end?: number }>, time: number) {
+  if (items.length === 0) {
+    return null;
+  }
+
+  for (let index = 0; index < items.length; index += 1) {
+    const start = items[index].start;
+    const end = items[index].end ?? items[index + 1]?.start ?? Number.POSITIVE_INFINITY;
+    if (time >= start && time < end) {
+      return start;
+    }
+  }
+
+  return items[items.length - 1]?.start ?? null;
+}
+
 export function Transcript({ videoId }: { videoId: string }) {
-  const { seekTo } = useWatchPlayer();
+  const { seekTo, currentTime } = useWatchPlayer();
   const [status, setStatus] = useState<TranscriptStatus | null>(null);
   const [segments, setSegments] = useState<TranscriptSegment[]>([]);
-  const [activeStart, setActiveStart] = useState<number | null>(null);
   const [loadError, setLoadError] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
     let timeoutId = 0;
-    setActiveStart(null);
 
     async function load() {
       try {
@@ -111,6 +125,8 @@ export function Transcript({ videoId }: { videoId: string }) {
     );
   }
 
+  const activeStart = activeStartAtTime(segments, currentTime);
+
   return (
     <div className="mt-4 pr-1">
       <ol className="space-y-1">
@@ -125,7 +141,6 @@ export function Transcript({ videoId }: { videoId: string }) {
                   isActive ? "bg-voom-active" : "hover:bg-voom-soft"
                 }`}
                 onClick={() => {
-                  setActiveStart(segment.start);
                   seekTo(segment.start);
                 }}
               >

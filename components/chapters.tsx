@@ -24,17 +24,31 @@ function isPollable(status: ChapterStatus | null) {
   return status == null || status === "pending" || status === "processing";
 }
 
+function activeStartAtTime(items: Chapter[], time: number) {
+  if (items.length === 0) {
+    return null;
+  }
+
+  for (let index = 0; index < items.length; index += 1) {
+    const start = items[index].start;
+    const end = items[index + 1]?.start ?? Number.POSITIVE_INFINITY;
+    if (time >= start && time < end) {
+      return start;
+    }
+  }
+
+  return items[items.length - 1]?.start ?? null;
+}
+
 export function Chapters({ videoId }: { videoId: string }) {
-  const { seekTo } = useWatchPlayer();
+  const { seekTo, currentTime } = useWatchPlayer();
   const [status, setStatus] = useState<ChapterStatus | null>(null);
   const [items, setItems] = useState<Chapter[]>([]);
-  const [activeStart, setActiveStart] = useState<number | null>(null);
   const [loadError, setLoadError] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
     let timeoutId = 0;
-    setActiveStart(null);
 
     async function load() {
       try {
@@ -105,6 +119,8 @@ export function Chapters({ videoId }: { videoId: string }) {
     );
   }
 
+  const activeStart = activeStartAtTime(items, currentTime);
+
   return (
     <div className="mt-4 pr-1 text-sm">
       {items.length === 0 ? (
@@ -122,7 +138,6 @@ export function Chapters({ videoId }: { videoId: string }) {
                     isActive ? "bg-voom-active" : "hover:bg-voom-soft"
                   }`}
                   onClick={() => {
-                    setActiveStart(chapter.start);
                     seekTo(chapter.start);
                   }}
                 >

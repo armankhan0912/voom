@@ -143,15 +143,6 @@ html[data-voom-sidebar="collapsed"] {
     box-shadow: 0 0 0 3px rgba(255, 107, 0, 0.16);
   }
 
-  .voom-watch-video::-webkit-media-controls-timeline {
-    display: none;
-  }
-
-  .voom-watch-video::-webkit-media-controls-current-time-display,
-  .voom-watch-video::-webkit-media-controls-time-remaining-display {
-    display: none;
-  }
-
   .voom-sidebar-panel {
     transition: width var(--voom-sidebar-motion) ease;
   }
