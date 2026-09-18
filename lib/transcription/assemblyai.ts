@@ -4,11 +4,19 @@ import type { TranscriptSegment } from "@/lib/transcription/types";
 const ASSEMBLYAI_BASE_URL = "https://api.assemblyai.com/v2";
 export const ASSEMBLYAI_WEBHOOK_HEADER = "X-Voom-Transcript-Secret";
 
+type AssemblyAIUtterance = {
+  start: number;
+  end: number;
+  text: string;
+  translated_texts?: Record<string, string | null> | null;
+};
+
 type AssemblyAITranscript = {
   id: string;
   status: string;
   error?: string | null;
   language_code?: string | null;
+  utterances?: AssemblyAIUtterance[] | null;
 };
 
 type AssemblyAISentence = {
@@ -60,6 +68,26 @@ export function mapSentencesToSegments(
   }));
 }
 
+export function mapUtterancesToEnglishSegments(
+  utterances: AssemblyAIUtterance[],
+): TranscriptSegment[] {
+  return utterances
+    .map((utterance) => {
+      const translated = utterance.translated_texts?.en?.trim();
+      const text = translated || utterance.text.trim();
+      if (!text) {
+        return null;
+      }
+
+      return {
+        start: millisecondsToSeconds(utterance.start),
+        end: millisecondsToSeconds(utterance.end),
+        text,
+      };
+    })
+    .filter((segment): segment is TranscriptSegment => segment != null);
+}
+
 async function assemblyaiRequest<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${ASSEMBLYAI_BASE_URL}${path}`, {
     ...init,
@@ -94,6 +122,15 @@ export async function submitAssemblyAITranscript(options: {
     audio_url: options.audioUrl,
     speech_models: ["universal-3-5-pro", "universal-2"],
     language_detection: true,
+    speaker_labels: true,
+    speech_understanding: {
+      request: {
+        translation: {
+          target_languages: ["en"],
+          match_original_utterance: true,
+        },
+      },
+    },
   };
 
   if (options.webhookUrl && options.webhookSecret) {
@@ -118,4 +155,13 @@ export async function getAssemblyAISentenceSegments(id: string) {
   );
 
   return mapSentencesToSegments(payload.sentences ?? []);
+}
+
+export async function getEnglishTranscriptSegments(job: AssemblyAITranscript) {
+  const fromUtterances = mapUtterancesToEnglishSegments(job.utterances ?? []);
+  if (fromUtterances.length > 0) {
+    return fromUtterances;
+  }
+
+  return getAssemblyAISentenceSegments(job.id);
 }

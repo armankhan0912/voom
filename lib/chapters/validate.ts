@@ -8,15 +8,23 @@ function startKey(start: number) {
   return Math.round(start * 1000);
 }
 
-function transcriptStartMap(segments: TranscriptSegment[]) {
-  const starts = new Map<number, number>();
+function nearestTranscriptStart(start: number, segments: TranscriptSegment[]) {
+  if (segments.length === 0) {
+    return null;
+  }
+
+  let best = segments[0].start;
+  let bestDistance = Math.abs(start - best);
+
   for (const segment of segments) {
-    const key = startKey(segment.start);
-    if (!starts.has(key)) {
-      starts.set(key, segment.start);
+    const distance = Math.abs(start - segment.start);
+    if (distance < bestDistance) {
+      best = segment.start;
+      bestDistance = distance;
     }
   }
-  return starts;
+
+  return best;
 }
 
 export function validateGeneratedChapters(
@@ -24,35 +32,34 @@ export function validateGeneratedChapters(
   segments: TranscriptSegment[],
 ): Chapter[] {
   if (!value || typeof value !== "object") {
-    throw new Error("Gemini returned an invalid chapters payload");
+    return [];
   }
 
   const payload = value as { chapters?: unknown };
   if (!Array.isArray(payload.chapters)) {
-    throw new Error("Gemini returned a payload without chapters");
+    return [];
   }
 
-  const allowedStarts = transcriptStartMap(segments);
   const seen = new Set<number>();
   const validated: Chapter[] = [];
 
   for (const item of payload.chapters) {
     if (!item || typeof item !== "object") {
-      throw new Error("Gemini returned an invalid chapter");
+      continue;
     }
 
     const chapter = item as { start?: unknown; title?: unknown };
     if (typeof chapter.start !== "number" || !Number.isFinite(chapter.start)) {
-      throw new Error("Gemini returned a chapter with an invalid timestamp");
+      continue;
     }
 
     if (typeof chapter.title !== "string" || !chapter.title.trim()) {
-      throw new Error("Gemini returned a chapter without a title");
+      continue;
     }
 
-    const canonicalStart = allowedStarts.get(startKey(chapter.start));
+    const canonicalStart = nearestTranscriptStart(chapter.start, segments);
     if (canonicalStart == null) {
-      throw new Error("Gemini returned a chapter timestamp that is not in the transcript");
+      continue;
     }
 
     if (seen.has(startKey(canonicalStart))) {

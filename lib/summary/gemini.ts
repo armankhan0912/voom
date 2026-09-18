@@ -6,7 +6,7 @@ const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GE
 
 const SYSTEM_PROMPT = `You summarize a screen recording from its transcript only.
 
-Write in the same language as the transcript (English, Hindi, Hinglish, or mixed).
+Write only in English. If the transcript is Hindi, Hinglish, or mixed, translate the meaning into English. Do not copy non-English wording.
 Describe only what the speaker actually said. Do not invent details.
 Do not include chapters, timestamps, speaker labels, quotes, action items, or titles.
 
@@ -45,7 +45,10 @@ function parseGeneratedSummary(value: unknown): GeneratedSummary {
   }
 
   if (!Array.isArray(payload.keyPoints)) {
-    throw new Error("Gemini summary is missing key points");
+    return {
+      overview: payload.overview.trim(),
+      keyPoints: [],
+    };
   }
 
   const keyPoints = payload.keyPoints
@@ -60,9 +63,27 @@ function parseGeneratedSummary(value: unknown): GeneratedSummary {
   };
 }
 
-export async function generateSummaryFromTranscript(
-  transcriptText: string,
-): Promise<GeneratedSummary> {
+function isRetryableGeminiError(error: Error, status?: number) {
+  if (status === 429 || (status != null && status >= 500)) {
+    return true;
+  }
+
+  const message = error.message.toLowerCase();
+  return (
+    message.includes("empty") ||
+    message.includes("could not be parsed") ||
+    message.includes("429") ||
+    message.includes("unavailable")
+  );
+}
+
+async function requestGeminiJson(options: {
+  systemPrompt: string;
+  userText: string;
+  schema: unknown;
+  emptyMessage: string;
+  parseMessage: string;
+}): Promise<unknown> {
   const response = await fetch(GEMINI_URL, {
     method: "POST",
     headers: {
@@ -71,17 +92,17 @@ export async function generateSummaryFromTranscript(
     },
     body: JSON.stringify({
       systemInstruction: {
-        parts: [{ text: SYSTEM_PROMPT }],
+        parts: [{ text: options.systemPrompt }],
       },
       contents: [
         {
           role: "user",
-          parts: [{ text: `Transcript:\n${transcriptText}` }],
+          parts: [{ text: options.userText }],
         },
       ],
       generationConfig: {
         responseMimeType: "application/json",
-        responseSchema: SUMMARY_SCHEMA,
+        responseSchema: options.schema,
       },
     }),
   });
@@ -94,20 +115,57 @@ export async function generateSummaryFromTranscript(
   } | null;
 
   if (!response.ok) {
-    throw new Error(payload?.error?.message || "Gemini request failed");
+    const error = new Error(payload?.error?.message || "Gemini request failed");
+    (error as Error & { status?: number }).status = response.status;
+    throw error;
   }
 
   const text = payload?.candidates?.[0]?.content?.parts?.[0]?.text;
   if (!text) {
-    throw new Error("Gemini returned an empty summary");
+    throw new Error(options.emptyMessage);
   }
 
-  let parsed: unknown;
   try {
-    parsed = JSON.parse(text) as unknown;
+    return JSON.parse(text) as unknown;
   } catch {
-    throw new Error("Gemini returned summary JSON that could not be parsed");
+    throw new Error(options.parseMessage);
   }
+}
+
+async function requestGeminiJsonWithRetry(options: {
+  systemPrompt: string;
+  userText: string;
+  schema: unknown;
+  emptyMessage: string;
+  parseMessage: string;
+}): Promise<unknown> {
+  let lastError: Error | null = null;
+
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    try {
+      return await requestGeminiJson(options);
+    } catch (caught) {
+      lastError = caught instanceof Error ? caught : new Error("Gemini request failed");
+      const status = (caught as { status?: number }).status;
+      if (!isRetryableGeminiError(lastError, status) || attempt === 1) {
+        throw lastError;
+      }
+    }
+  }
+
+  throw lastError ?? new Error("Gemini request failed");
+}
+
+export async function generateSummaryFromTranscript(
+  transcriptText: string,
+): Promise<GeneratedSummary> {
+  const parsed = await requestGeminiJsonWithRetry({
+    systemPrompt: SYSTEM_PROMPT,
+    userText: `Transcript:\n${transcriptText}`,
+    schema: SUMMARY_SCHEMA,
+    emptyMessage: "Gemini returned an empty summary",
+    parseMessage: "Gemini returned summary JSON that could not be parsed",
+  });
 
   return parseGeneratedSummary(parsed);
 }
@@ -116,7 +174,7 @@ const CHAPTERS_PROMPT = `You create video chapters from a timestamped transcript
 
 Identify meaningful topic changes. Do not make a chapter for every sentence.
 Create about 3–8 chapters, or fewer for a short recording.
-Write concise titles in the same language as the transcript (English, Hindi, Hinglish, or mixed).
+Write concise titles only in English. If the transcript is Hindi, Hinglish, or mixed, translate the meaning into English. Do not copy non-English wording.
 Describe only what the speaker actually said. Do not invent details.
 
 Each chapter start must be copied from a transcript timestamp in the input.
@@ -168,48 +226,11 @@ export function formatTimestampedTranscript(
 export async function generateChaptersJsonFromTranscript(
   transcriptText: string,
 ): Promise<unknown> {
-  const response = await fetch(GEMINI_URL, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "x-goog-api-key": getApiKey(),
-    },
-    body: JSON.stringify({
-      systemInstruction: {
-        parts: [{ text: CHAPTERS_PROMPT }],
-      },
-      contents: [
-        {
-          role: "user",
-          parts: [{ text: `Timestamped transcript:\n${transcriptText}` }],
-        },
-      ],
-      generationConfig: {
-        responseMimeType: "application/json",
-        responseSchema: CHAPTERS_SCHEMA,
-      },
-    }),
+  return requestGeminiJsonWithRetry({
+    systemPrompt: CHAPTERS_PROMPT,
+    userText: `Timestamped transcript:\n${transcriptText}`,
+    schema: CHAPTERS_SCHEMA,
+    emptyMessage: "Gemini returned empty chapters",
+    parseMessage: "Gemini returned chapter JSON that could not be parsed",
   });
-
-  const payload = (await response.json().catch(() => null)) as {
-    error?: { message?: string };
-    candidates?: Array<{
-      content?: { parts?: Array<{ text?: string }> };
-    }>;
-  } | null;
-
-  if (!response.ok) {
-    throw new Error(payload?.error?.message || "Gemini request failed");
-  }
-
-  const text = payload?.candidates?.[0]?.content?.parts?.[0]?.text;
-  if (!text) {
-    throw new Error("Gemini returned empty chapters");
-  }
-
-  try {
-    return JSON.parse(text) as unknown;
-  } catch {
-    throw new Error("Gemini returned chapter JSON that could not be parsed");
-  }
 }

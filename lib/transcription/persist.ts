@@ -5,8 +5,8 @@ import { transcripts } from "@/lib/db/schema";
 import { startChapters } from "@/lib/chapters/start";
 import { startSummary } from "@/lib/summary/start";
 import {
-  getAssemblyAISentenceSegments,
   getAssemblyAITranscript,
+  getEnglishTranscriptSegments,
 } from "@/lib/transcription/assemblyai";
 
 export async function markTranscriptFailedByVideoId(
@@ -66,7 +66,7 @@ export async function persistAssemblyAIResult(providerJobId: string) {
   }
 
   try {
-    const segments = await getAssemblyAISentenceSegments(providerJobId);
+    const segments = await getEnglishTranscriptSegments(job);
 
     await db
       .update(transcripts)
