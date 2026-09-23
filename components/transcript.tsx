@@ -1,7 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { GenerationFailure } from "@/components/generation-failure";
 import { useWatchPlayer } from "@/components/watch-player-context";
+import { displayFailureReason } from "@/lib/generation-error";
 import {
   looksLikeCombinedTranscript,
   type TranscriptSegment,
@@ -45,11 +47,21 @@ function activeStartAtTime(items: Array<{ start: number; end?: number }>, time: 
   return items[items.length - 1]?.start ?? null;
 }
 
-export function Transcript({ videoId }: { videoId: string }) {
+export function Transcript({
+  videoId,
+  isOwner,
+}: {
+  videoId: string;
+  isOwner: boolean;
+}) {
   const { seekTo, currentTime } = useWatchPlayer();
   const [status, setStatus] = useState<TranscriptStatus | null>(null);
   const [segments, setSegments] = useState<TranscriptSegment[]>([]);
+  const [failureReason, setFailureReason] = useState<string | null>(null);
   const [loadError, setLoadError] = useState(false);
+  const [retrying, setRetrying] = useState(false);
+  const [pollId, setPollId] = useState(0);
+  const retryGraceRef = useRef(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -73,8 +85,21 @@ export function Transcript({ videoId }: { videoId: string }) {
         const nextStatus = payload.status ?? "processing";
         const nextSegments = Array.isArray(payload.segments) ? payload.segments : [];
         setLoadError(false);
-        setStatus(nextStatus);
         setSegments(nextSegments);
+
+        if (nextStatus === "failed" && retryGraceRef.current > 0) {
+          retryGraceRef.current -= 1;
+          setStatus("processing");
+          setFailureReason(null);
+          timeoutId = window.setTimeout(load, POLL_INTERVAL_MS);
+          return;
+        }
+
+        retryGraceRef.current = 0;
+        setStatus(nextStatus);
+        setFailureReason(
+          nextStatus === "failed" ? displayFailureReason(payload.error) : null,
+        );
 
         if (isPollable(nextStatus) || looksLikeCombinedTranscript(nextSegments)) {
           timeoutId = window.setTimeout(load, POLL_INTERVAL_MS);
@@ -95,7 +120,34 @@ export function Transcript({ videoId }: { videoId: string }) {
       cancelled = true;
       window.clearTimeout(timeoutId);
     };
-  }, [videoId]);
+  }, [pollId, videoId]);
+
+  async function retry() {
+    setRetrying(true);
+    try {
+      const response = await fetch(`/api/videos/${videoId}/transcript`, {
+        method: "POST",
+        credentials: "include",
+      });
+      if (!response.ok) {
+        return;
+      }
+
+      const payload = (await response.json()) as TranscriptResponse;
+      if (payload.status !== "processing") {
+        return;
+      }
+
+      retryGraceRef.current = 4;
+      setFailureReason(null);
+      setStatus("processing");
+      setPollId((value) => value + 1);
+    } catch {
+      // Keep the failed state on screen.
+    } finally {
+      setRetrying(false);
+    }
+  }
 
   if (loadError && status == null) {
     return (
@@ -113,9 +165,15 @@ export function Transcript({ videoId }: { videoId: string }) {
 
   if (status === "failed") {
     return (
-      <p className="mt-4 text-sm text-voom-muted">
-        Transcript generation failed.
-      </p>
+      <GenerationFailure
+        message="Transcript generation failed."
+        reason={failureReason}
+        canRetry={isOwner}
+        retrying={retrying}
+        onRetry={() => {
+          void retry();
+        }}
+      />
     );
   }
 

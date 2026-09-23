@@ -1,7 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { GenerationFailure } from "@/components/generation-failure";
 import { useWatchPlayer } from "@/components/watch-player-context";
+import { displayFailureReason } from "@/lib/generation-error";
 import type { Chapter, ChapterStatus } from "@/lib/chapters/types";
 
 const POLL_INTERVAL_MS = 2500;
@@ -40,11 +42,21 @@ function activeStartAtTime(items: Chapter[], time: number) {
   return items[items.length - 1]?.start ?? null;
 }
 
-export function Chapters({ videoId }: { videoId: string }) {
+export function Chapters({
+  videoId,
+  isOwner,
+}: {
+  videoId: string;
+  isOwner: boolean;
+}) {
   const { seekTo, currentTime } = useWatchPlayer();
   const [status, setStatus] = useState<ChapterStatus | null>(null);
   const [items, setItems] = useState<Chapter[]>([]);
+  const [failureReason, setFailureReason] = useState<string | null>(null);
   const [loadError, setLoadError] = useState(false);
+  const [retrying, setRetrying] = useState(false);
+  const [pollId, setPollId] = useState(0);
+  const retryGraceRef = useRef(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -67,8 +79,21 @@ export function Chapters({ videoId }: { videoId: string }) {
 
         const nextStatus = payload.status ?? "pending";
         setLoadError(false);
-        setStatus(nextStatus);
         setItems(Array.isArray(payload.chapters) ? payload.chapters : []);
+
+        if (nextStatus === "failed" && retryGraceRef.current > 0) {
+          retryGraceRef.current -= 1;
+          setStatus("processing");
+          setFailureReason(null);
+          timeoutId = window.setTimeout(load, POLL_INTERVAL_MS);
+          return;
+        }
+
+        retryGraceRef.current = 0;
+        setStatus(nextStatus);
+        setFailureReason(
+          nextStatus === "failed" ? displayFailureReason(payload.error) : null,
+        );
 
         if (isPollable(nextStatus)) {
           timeoutId = window.setTimeout(load, POLL_INTERVAL_MS);
@@ -89,7 +114,34 @@ export function Chapters({ videoId }: { videoId: string }) {
       cancelled = true;
       window.clearTimeout(timeoutId);
     };
-  }, [videoId]);
+  }, [pollId, videoId]);
+
+  async function retry() {
+    setRetrying(true);
+    try {
+      const response = await fetch(`/api/videos/${videoId}/chapters`, {
+        method: "POST",
+        credentials: "include",
+      });
+      if (!response.ok) {
+        return;
+      }
+
+      const payload = (await response.json()) as ChaptersResponse;
+      if (payload.status !== "processing") {
+        return;
+      }
+
+      retryGraceRef.current = 4;
+      setFailureReason(null);
+      setStatus("processing");
+      setPollId((value) => value + 1);
+    } catch {
+      // Keep the failed state on screen.
+    } finally {
+      setRetrying(false);
+    }
+  }
 
   if (loadError && status == null) {
     return (
@@ -113,9 +165,15 @@ export function Chapters({ videoId }: { videoId: string }) {
 
   if (status === "failed") {
     return (
-      <p className="mt-4 text-sm text-voom-muted">
-        Chapter generation failed.
-      </p>
+      <GenerationFailure
+        message="Chapter generation failed."
+        reason={failureReason}
+        canRetry={isOwner}
+        retrying={retrying}
+        onRetry={() => {
+          void retry();
+        }}
+      />
     );
   }
 

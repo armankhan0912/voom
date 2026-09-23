@@ -153,7 +153,7 @@ export default async function VoomPage({
           </section>
 
           <section className="voom-card flex min-h-0 flex-col overflow-hidden p-5 max-md:max-h-[min(32rem,60vh)] md:h-full">
-            <WatchTabs videoId={video.id} />
+            <WatchTabs videoId={video.id} isOwner={isOwner} />
           </section>
         </div>
       </main>

@@ -7,7 +7,13 @@ import { Transcript } from "@/components/transcript";
 
 type WatchTab = "summary" | "transcript" | "chapters";
 
-export function WatchTabs({ videoId }: { videoId: string }) {
+export function WatchTabs({
+  videoId,
+  isOwner,
+}: {
+  videoId: string;
+  isOwner: boolean;
+}) {
   const [tab, setTab] = useState<WatchTab>("transcript");
 
   return (
@@ -37,21 +43,21 @@ export function WatchTabs({ videoId }: { videoId: string }) {
           tab === "summary" ? "min-h-0 flex-1 overflow-y-auto" : "hidden"
         }
       >
-        <Summary videoId={videoId} />
+        <Summary videoId={videoId} isOwner={isOwner} />
       </div>
       <div
         className={
           tab === "transcript" ? "min-h-0 flex-1 overflow-y-auto" : "hidden"
         }
       >
-        <Transcript videoId={videoId} />
+        <Transcript videoId={videoId} isOwner={isOwner} />
       </div>
       <div
         className={
           tab === "chapters" ? "min-h-0 flex-1 overflow-y-auto" : "hidden"
         }
       >
-        <Chapters videoId={videoId} />
+        <Chapters videoId={videoId} isOwner={isOwner} />
       </div>
     </div>
   );
