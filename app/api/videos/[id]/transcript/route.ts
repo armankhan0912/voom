@@ -42,15 +42,38 @@ export async function GET(
     .from(transcripts)
     .where(eq(transcripts.videoId, id))
     .limit(1);
-  const transcript = transcriptRows[0];
+  let transcript = transcriptRows[0];
 
   if (!transcript) {
+    if (isOwner && video.status === "ready") {
+      after(() => {
+        void startTranscription(id);
+      });
+    }
+
     return Response.json({
       videoId: id,
       status: "pending",
       error: null,
       language: null,
       segments: null,
+    });
+  }
+
+  const waiting =
+    transcript.status === "pending" || transcript.status === "processing";
+
+  if (isOwner && video.status === "ready" && waiting && transcript.providerJobId) {
+    await persistAssemblyAIResult(transcript.providerJobId);
+    const refreshed = await db
+      .select()
+      .from(transcripts)
+      .where(eq(transcripts.videoId, id))
+      .limit(1);
+    transcript = refreshed[0] ?? transcript;
+  } else if (isOwner && video.status === "ready" && waiting) {
+    after(() => {
+      void startTranscription(id);
     });
   }
 

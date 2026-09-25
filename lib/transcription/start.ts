@@ -1,4 +1,4 @@
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, isNull, or } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { transcripts, videos } from "@/lib/db/schema";
 import { createTranscriptionUrl } from "@/lib/r2/presign";
@@ -58,7 +58,11 @@ async function enqueueTranscription(videoId: string) {
     .limit(1);
   const existing = existingRows[0];
 
-  if (existing?.status === "processing" || existing?.status === "ready") {
+  if (existing?.status === "ready") {
+    return;
+  }
+
+  if (existing?.status === "processing" && existing.providerJobId) {
     return;
   }
 
@@ -91,7 +95,10 @@ async function enqueueTranscription(videoId: string) {
     .where(
       and(
         eq(transcripts.videoId, videoId),
-        inArray(transcripts.status, ["pending", "failed"]),
+        or(
+          inArray(transcripts.status, ["pending", "failed"]),
+          and(eq(transcripts.status, "processing"), isNull(transcripts.providerJobId)),
+        ),
       ),
     )
     .returning();
