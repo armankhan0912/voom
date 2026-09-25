@@ -11,9 +11,11 @@ import { shareUrl, watchPath } from "@/lib/videos";
 
 export function RecordingCard({
   recording,
+  onDeleted,
 }: {
   recording: RecordingListItem;
   showOwner?: boolean;
+  onDeleted?: () => void;
 }) {
   return (
     <article className="voom-card hover:-translate-y-0.5 hover:border-voom-accent/35 hover:shadow-[0_8px_24px_rgba(23,23,23,0.07)]">
@@ -48,7 +50,7 @@ export function RecordingCard({
         </div>
         <div className="flex shrink-0 items-center gap-1">
           <ShareButton videoId={recording.id} url={shareUrl(recording.id)} />
-          <DeleteRecordingButton id={recording.id} />
+          <DeleteRecordingButton id={recording.id} onDeleted={onDeleted} />
         </div>
       </div>
     </article>

@@ -6,10 +6,12 @@ import { useState } from "react";
 export function DeleteRecordingButton({
   id,
   redirectTo,
+  onDeleted,
   className,
 }: {
   id: string;
   redirectTo?: string;
+  onDeleted?: () => void;
   className?: string;
 }) {
   const router = useRouter();
@@ -33,7 +35,10 @@ export function DeleteRecordingButton({
       }
       if (redirectTo) {
         router.push(redirectTo);
-        router.refresh();
+        return;
+      }
+      if (onDeleted) {
+        onDeleted();
         return;
       }
       router.refresh();

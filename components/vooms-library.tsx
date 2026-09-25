@@ -13,6 +13,7 @@ function startOfDay(date: Date) {
 }
 
 export function VoomsLibrary({ recordings }: { recordings: RecordingListItem[] }) {
+  const [items, setItems] = useState(recordings);
   const [query, setQuery] = useState("");
   const [range, setRange] = useState<Range>("all");
   const [sort, setSort] = useState<Sort>("newest");
@@ -24,7 +25,7 @@ export function VoomsLibrary({ recordings }: { recordings: RecordingListItem[] }
     const month = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
     const needle = query.trim().toLowerCase();
 
-    const next = recordings.filter((recording) => {
+    const next = items.filter((recording) => {
       const created = new Date(recording.createdAt).getTime();
       if (needle && !recording.title.toLowerCase().includes(needle)) {
         return false;
@@ -42,7 +43,7 @@ export function VoomsLibrary({ recordings }: { recordings: RecordingListItem[] }
     });
 
     return next;
-  }, [query, range, recordings, sort]);
+  }, [items, query, range, sort]);
 
   const tabs: { id: Range; label: string }[] = [
     { id: "all", label: "All" },
@@ -103,7 +104,12 @@ export function VoomsLibrary({ recordings }: { recordings: RecordingListItem[] }
         {filtered.length === 0 ? (
           <p className="text-voom-muted">No recordings match these filters.</p>
         ) : (
-          <RecordingGrid recordings={filtered} />
+          <RecordingGrid
+            recordings={filtered}
+            onDeleted={(id) =>
+              setItems((current) => current.filter((item) => item.id !== id))
+            }
+          />
         )}
       </div>
     </main>
