@@ -8,13 +8,11 @@ import "./globals.css";
 
 const inter = Inter({
   subsets: ["latin"],
-  weight: ["300", "400", "500", "600", "700"],
   variable: "--font-voom",
 });
 
 const interTight = Inter_Tight({
   subsets: ["latin"],
-  weight: ["500", "600", "700"],
   variable: "--font-voom-display",
 });
 
