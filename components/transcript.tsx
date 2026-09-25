@@ -6,6 +6,7 @@ import { useWatchPlayer } from "@/components/watch-player-context";
 import { displayFailureReason } from "@/lib/generation-error";
 import {
   looksLikeCombinedTranscript,
+  transcriptNeedsEnglish,
   type TranscriptSegment,
   type TranscriptStatus,
 } from "@/lib/transcription/types";
@@ -101,7 +102,11 @@ export function Transcript({
           nextStatus === "failed" ? displayFailureReason(payload.error) : null,
         );
 
-        if (isPollable(nextStatus) || looksLikeCombinedTranscript(nextSegments)) {
+        if (
+          isPollable(nextStatus) ||
+          looksLikeCombinedTranscript(nextSegments) ||
+          transcriptNeedsEnglish(nextSegments)
+        ) {
           timeoutId = window.setTimeout(load, POLL_INTERVAL_MS);
         }
       } catch {

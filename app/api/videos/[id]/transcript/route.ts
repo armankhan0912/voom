@@ -6,7 +6,11 @@ import { getCurrentDbUser } from "@/lib/current-user";
 import { persistAssemblyAIResult } from "@/lib/transcription/persist";
 import { serializeTranscript } from "@/lib/transcription/serialize";
 import { startTranscription } from "@/lib/transcription/start";
-import { looksLikeCombinedTranscript } from "@/lib/transcription/types";
+import { translateStoredTranscript } from "@/lib/transcription/english";
+import {
+  looksLikeCombinedTranscript,
+  transcriptNeedsEnglish,
+} from "@/lib/transcription/types";
 import { VIDEO_ID_PATTERN } from "@/lib/videos";
 
 export async function GET(
@@ -58,6 +62,14 @@ export async function GET(
   ) {
     after(() => {
       void persistAssemblyAIResult(transcript.providerJobId as string);
+    });
+  } else if (
+    isOwner &&
+    transcript.status === "ready" &&
+    transcriptNeedsEnglish(transcript.segments)
+  ) {
+    after(() => {
+      void translateStoredTranscript(transcript.id);
     });
   }
 

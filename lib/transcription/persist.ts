@@ -8,6 +8,7 @@ import {
   getAssemblyAITranscript,
   getEnglishTranscriptSegments,
 } from "@/lib/transcription/assemblyai";
+import { ensureEnglishSegments } from "@/lib/transcription/english";
 import { looksLikeCombinedTranscript } from "@/lib/transcription/types";
 
 export async function markTranscriptFailedByVideoId(
@@ -90,7 +91,9 @@ async function persistAssemblyAIResultInner(providerJobId: string) {
   }
 
   try {
-    const segments = await getEnglishTranscriptSegments(job);
+    const segments = await ensureEnglishSegments(
+      await getEnglishTranscriptSegments(job),
+    );
 
     await db
       .update(transcripts)

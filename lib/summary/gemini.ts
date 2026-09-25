@@ -223,6 +223,55 @@ export function formatTimestampedTranscript(
     .join("\n");
 }
 
+const TRANSLATE_PROMPT = `You translate transcript lines into English.
+
+If a line is already English, return it unchanged.
+If a line is Hindi, Hinglish, or mixed, translate the meaning into English. Do not copy non-English wording.
+Keep the same number of lines, in the same order.
+Do not add timestamps, speaker labels, or extra lines.
+
+Return JSON with:
+- lines: array of strings`;
+
+const TRANSLATE_SCHEMA = {
+  type: "OBJECT",
+  properties: {
+    lines: {
+      type: "ARRAY",
+      items: { type: "STRING" },
+    },
+  },
+  required: ["lines"],
+};
+
+export async function translateLinesToEnglish(lines: string[]): Promise<string[]> {
+  if (lines.length === 0) {
+    return [];
+  }
+
+  const parsed = await requestGeminiJsonWithRetry({
+    systemPrompt: TRANSLATE_PROMPT,
+    userText: JSON.stringify({ lines }),
+    schema: TRANSLATE_SCHEMA,
+    emptyMessage: "Gemini returned an empty translation",
+    parseMessage: "Gemini returned translation JSON that could not be parsed",
+  });
+
+  if (!parsed || typeof parsed !== "object" || !Array.isArray((parsed as { lines?: unknown }).lines)) {
+    throw new Error("Gemini returned an invalid translation payload");
+  }
+
+  const translated = (parsed as { lines: unknown[] }).lines.filter(
+    (line): line is string => typeof line === "string",
+  );
+
+  if (translated.length !== lines.length) {
+    throw new Error("Gemini returned a translation with the wrong number of lines");
+  }
+
+  return translated.map((line) => line.trim());
+}
+
 export async function generateChaptersJsonFromTranscript(
   transcriptText: string,
 ): Promise<unknown> {
